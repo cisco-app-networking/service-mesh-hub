@@ -22,6 +22,8 @@ title: "mesh.proto"
   - [MeshSpec.ConsulConnectMesh](#discovery.smh.solo.io.MeshSpec.ConsulConnectMesh)
   - [MeshSpec.Istio](#discovery.smh.solo.io.MeshSpec.Istio)
   - [MeshSpec.Istio.CitadelInfo](#discovery.smh.solo.io.MeshSpec.Istio.CitadelInfo)
+  - [MeshSpec.Istio.EgressGatewayInfo](#discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo)
+  - [MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry](#discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry)
   - [MeshSpec.Istio.IngressGatewayInfo](#discovery.smh.solo.io.MeshSpec.Istio.IngressGatewayInfo)
   - [MeshSpec.Istio.IngressGatewayInfo.WorkloadLabelsEntry](#discovery.smh.solo.io.MeshSpec.Istio.IngressGatewayInfo.WorkloadLabelsEntry)
   - [MeshSpec.LinkerdMesh](#discovery.smh.solo.io.MeshSpec.LinkerdMesh)
@@ -117,6 +119,7 @@ Mesh object representing an installed Istio control plane
 | installation | [MeshSpec.MeshInstallation](#discovery.smh.solo.io.MeshSpec.MeshInstallation) |  | Configuration metadata about the istio control plane installation. |
 | citadelInfo | [MeshSpec.Istio.CitadelInfo](#discovery.smh.solo.io.MeshSpec.Istio.CitadelInfo) |  | Configuration metadata for Istio Citadel (Istio's security component). |
 | ingressGateways | [][MeshSpec.Istio.IngressGatewayInfo](#discovery.smh.solo.io.MeshSpec.Istio.IngressGatewayInfo) | repeated | Configuration metadata for Istio IngressGateway (the Istio Ingress). |
+| egressGateways | [][MeshSpec.Istio.EgressGatewayInfo](#discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo) | repeated | Configuration metadata for Istio EgressGateway (the Istio Egress). |
 
 
 
@@ -133,6 +136,39 @@ Configuration metadata for Istio Citadel (Istio's security component).
 | ----- | ---- | ----- | ----------- |
 | trustDomain | [string](#string) |  | Istio trust domain used for https/spiffe identity. https://spiffe.io/spiffe/concepts/#trust-domain https://istio.io/docs/reference/glossary/#identity<br>If empty will default to "cluster.local". |
 | citadelServiceAccount | [string](#string) |  | istio-citadel service account, used to determine identity for the Istio CA cert. If empty will default to "istio-citadel". |
+
+
+
+
+
+
+<a name="discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo"></a>
+
+### MeshSpec.Istio.EgressGatewayInfo
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  | Name of the service providing the egressgateway defaults to `istio-egressgateway` |
+| workloadLabels | [][MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry](#discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry) | repeated | Labels matching the workload which backs the gateway, defaults to `{"istio": "egressgateway"}`. |
+| tlsContainerPort | [uint32](#uint32) |  | Container port on which the gateway is listening for TLS connections. Defaults to 15443. |
+
+
+
+
+
+
+<a name="discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry"></a>
+
+### MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [string](#string) |  |  |
 
 
 

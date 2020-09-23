@@ -65,6 +65,17 @@ func (this *MeshSpec_Istio_IngressGatewayInfo) UnmarshalJSON(b []byte) error {
 	return MeshUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for MeshSpec_Istio_EgressGatewayInfo
+func (this *MeshSpec_Istio_EgressGatewayInfo) MarshalJSON() ([]byte, error) {
+	str, err := MeshMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for MeshSpec_Istio_EgressGatewayInfo
+func (this *MeshSpec_Istio_EgressGatewayInfo) UnmarshalJSON(b []byte) error {
+	return MeshUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for MeshSpec_AwsAppMesh
 func (this *MeshSpec_AwsAppMesh) MarshalJSON() ([]byte, error) {
 	str, err := MeshMarshaler.MarshalToString(this)

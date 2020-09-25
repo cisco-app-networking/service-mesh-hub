@@ -132,6 +132,7 @@ message MeshSpec {
     */
     message OSM {
 
+        // Information about where OSM is installed in a managed Kubernetes Cluster.
         MeshInstallation installation = 1;
     }
 

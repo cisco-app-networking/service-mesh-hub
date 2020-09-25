@@ -3,7 +3,7 @@
 //go:generate mockgen -source ./snapshot.go -destination mocks/snapshot.go
 
 // Definitions for Output Snapshots
-package output
+package discovery
 
 import (
 	"context"
@@ -349,6 +349,8 @@ func (s snapshot) MarshalJSON() ([]byte, error) {
 		meshSet = meshSet.Union(set.Set())
 	}
 	snapshotMap["meshes"] = meshSet.List()
+
+	snapshotMap["clusters"] = s.clusters
 
 	return json.Marshal(snapshotMap)
 }

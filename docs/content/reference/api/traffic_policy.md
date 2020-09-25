@@ -30,6 +30,8 @@ title: "traffic_policy.proto"
   - [TrafficPolicySpec.Mirror](#networking.smh.solo.io.TrafficPolicySpec.Mirror)
   - [TrafficPolicySpec.MultiDestination](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination)
   - [TrafficPolicySpec.MultiDestination.WeightedDestination](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination)
+  - [TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination)
+  - [TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination.SubsetEntry](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination.SubsetEntry)
   - [TrafficPolicySpec.MultiDestination.WeightedDestination.KubeDestination](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.KubeDestination)
   - [TrafficPolicySpec.MultiDestination.WeightedDestination.KubeDestination.SubsetEntry](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.KubeDestination.SubsetEntry)
   - [TrafficPolicySpec.OutlierDetection](#networking.smh.solo.io.TrafficPolicySpec.OutlierDetection)
@@ -282,7 +284,41 @@ Express an optional HttpMethod by wrapping it in a nillable message.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | kubeService | [TrafficPolicySpec.MultiDestination.WeightedDestination.KubeDestination](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.KubeDestination) |  | The use kubeService to shift traffic a Kubernetes Service/subset. |
+| failoverService | [TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination) |  | A traffic shift destination targeting a FailoverService. |
 | weight | [uint32](#uint32) |  | Weights across all of the destinations must sum to 100. Each is interpreted as a percent from 0-100. |
+
+
+
+
+
+
+<a name="networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination"></a>
+
+### TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination
+A traffic shift destination that references a FailoverService.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  | The name of the FailoverService. |
+| namespace | [string](#string) |  | The namespace of the FailoverService. |
+| subset | [][TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination.SubsetEntry](#networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination.SubsetEntry) | repeated | Subset routing is currently only supported for Istio backing services. |
+
+
+
+
+
+
+<a name="networking.smh.solo.io.TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination.SubsetEntry"></a>
+
+### TrafficPolicySpec.MultiDestination.WeightedDestination.FailoverServiceDestination.SubsetEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [string](#string) |  |  |
 
 
 
@@ -335,6 +371,7 @@ Configure outlier detection settings on targeted services. If set, source select
 | consecutiveErrors | [uint32](#uint32) |  | Number of errors before a host is ejected from the connection pool. Defaults to 5. |
 | interval | [google.protobuf.Duration](#google.protobuf.Duration) |  | Time interval between ejection sweep analysis. Format: 1h/1m/1s/1ms. MUST BE >=1ms. Defaults to 10s. |
 | baseEjectionTime | [google.protobuf.Duration](#google.protobuf.Duration) |  | Minimum ejection duration. Format: 1h/1m/1s/1ms. MUST BE >=1ms. Defaults to 30s. |
+| maxEjectionPercent | [uint32](#uint32) |  | Maximum % of hosts in the load balancing pool for the upstream service that can be ejected, but will eject at least one host regardless of the value. MUST BE >= 0 and <= 100. Defaults to 100%, allowing all hosts to be ejected from the pool. |
 
 
 
@@ -402,6 +439,7 @@ Describes how to match a given string in HTTP headers. Match is case-sensitive.
 | observedGeneration | [int64](#int64) |  | The most recent generation observed in the the TrafficPolicy metadata. if the observedGeneration does not match generation, the controller has not received the most recent version of this resource. |
 | state | [ApprovalState](#networking.smh.solo.io.ApprovalState) |  | The state of the overall resource. It will only show accepted if it has been successfully applied to all target meshes. |
 | trafficTargets | [][TrafficPolicyStatus.TrafficTargetsEntry](#networking.smh.solo.io.TrafficPolicyStatus.TrafficTargetsEntry) | repeated | The status of the TrafficPolicy for each TrafficTarget to which it has been applied. A TrafficPolicy may be Accepted for some TrafficTargets and rejected for others. |
+| workloads | [][string](#string) | repeated | The list of Workloads to which this policy has been applied. |
 
 
 

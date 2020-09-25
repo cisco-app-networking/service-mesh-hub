@@ -42,8 +42,15 @@ type Inputs struct {
 	VirtualMeshes networkingv1alpha2sets.VirtualMeshSet
 }
 
+const (
+	GlobalDnsSuffix = ".global"
+)
+
 var (
-	MissingHostname        = eris.New("Missing required field \"hostname\".")
+	MissingHostname             = eris.New("Missing required field \"hostname\".")
+	HostnameMissingGlobalSuffix = func(hostname string) error {
+		return eris.Errorf("Provided hostname %s is missing required suffix \"%s\".", hostname, GlobalDnsSuffix)
+	}
 	MissingPort            = eris.New("Missing required field \"port\".")
 	MissingMeshes          = eris.New("Missing required field \"meshes\".")
 	MissingServices        = eris.New("There must be at least one service declared for the FailoverService.")
@@ -94,8 +101,8 @@ func NewFailoverServiceValidator() FailoverServiceValidator {
 
 func (f *failoverServiceValidator) Validate(inputs Inputs, failoverService *networkingv1alpha2.FailoverServiceSpec) []error {
 	var errs []error
-	if err := f.validateHostname(failoverService); err != nil {
-		errs = append(errs, err)
+	if hostnameErrs := f.validateHostname(failoverService); hostnameErrs != nil {
+		errs = append(errs, hostnameErrs...)
 	}
 	if portErrs := f.validatePort(failoverService); portErrs != nil {
 		errs = append(errs, portErrs...)
@@ -135,18 +142,18 @@ func (f *failoverServiceValidator) validateServices(
 	meshes discoveryv1alpha2sets.MeshSet,
 ) []error {
 	var errs []error
-	componentServices := failoverService.GetBackingServices()
-	if len(componentServices) == 0 {
+	backingServices := failoverService.GetBackingServices()
+	if len(backingServices) == 0 {
 		return []error{MissingServices}
 	}
-	for _, typedServiceRef := range componentServices {
+	for _, typedServiceRef := range backingServices {
 		if typedServiceRef.GetKubeService() == nil {
 			errs = append(errs, UnsupportedServiceType(typedServiceRef.GetBackingServiceType()))
 			continue
 		}
 		serviceRef := typedServiceRef.GetKubeService()
-		trafficTarget, err := f.findTrafficTarget(serviceRef, allTrafficTargets)
-		if err != nil {
+		trafficTarget := f.findTrafficTarget(serviceRef, allTrafficTargets)
+		if trafficTarget == nil {
 			// Corresponding TrafficTarget not found.
 			errs = append(errs, BackingServiceNotFound(serviceRef))
 			continue
@@ -171,13 +178,13 @@ func (f *failoverServiceValidator) validateServices(
 func (f *failoverServiceValidator) findTrafficTarget(
 	serviceRef *skv2core.ClusterObjectRef,
 	allTrafficTargets []*discoveryv1alpha2.TrafficTarget,
-) (*discoveryv1alpha2.TrafficTarget, error) {
+) *discoveryv1alpha2.TrafficTarget {
 	for _, trafficTarget := range allTrafficTargets {
 		if ezkube.ClusterRefsMatch(serviceRef, trafficTarget.Spec.GetKubeService().GetRef()) {
-			return trafficTarget, nil
+			return trafficTarget
 		}
 	}
-	return nil, BackingServiceNotFound(serviceRef)
+	return nil
 }
 
 func (f *failoverServiceValidator) validateServiceOutlierDetection(trafficTarget *discoveryv1alpha2.TrafficTarget) error {
@@ -225,16 +232,16 @@ func (f *failoverServiceValidator) validateFederation(
 		}
 		referencedMeshes.Insert(mesh)
 	}
-	// Process declared services
+	// Process backing services
 	for _, typedServiceRef := range failoverService.GetBackingServices() {
 		if typedServiceRef.GetKubeService() == nil {
 			// Error already reported when validating component services.
 			continue
 		}
 		serviceRef := typedServiceRef.GetKubeService()
-		trafficTarget, err := f.findTrafficTarget(serviceRef, allTrafficTargets)
-		if err != nil {
-			errs = append(errs, err)
+		trafficTarget := f.findTrafficTarget(serviceRef, allTrafficTargets)
+		if trafficTarget == nil {
+			// Error already reported when validating backing services.
 			continue
 		}
 		mesh, err := allMeshes.Find(trafficTarget.Spec.Mesh)
@@ -271,16 +278,20 @@ func (f *failoverServiceValidator) validateFederation(
 	return errs
 }
 
-func (f *failoverServiceValidator) validateHostname(failoverService *networkingv1alpha2.FailoverServiceSpec) error {
+func (f *failoverServiceValidator) validateHostname(failoverService *networkingv1alpha2.FailoverServiceSpec) []error {
 	hostname := failoverService.GetHostname()
+	var errs []error
 	if hostname == "" {
-		return MissingHostname
+		return []error{MissingHostname}
+	}
+	if !strings.HasSuffix(hostname, GlobalDnsSuffix) {
+		errs = append(errs, HostnameMissingGlobalSuffix(hostname))
 	}
 	errStrings := validation.IsDNS1123Subdomain(hostname)
 	if len(errStrings) > 0 {
-		return eris.New(strings.Join(errStrings, ", "))
+		errs = append(errs, eris.New(strings.Join(errStrings, ", ")))
 	}
-	return nil
+	return errs
 }
 
 func (f *failoverServiceValidator) validatePort(failoverService *networkingv1alpha2.FailoverServiceSpec) []error {

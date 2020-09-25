@@ -123,10 +123,25 @@ message TrafficPolicySpec {
                 uint32 port = 5;
             }
 
+            // A traffic shift destination that references a FailoverService.
+            message FailoverServiceDestination {
+                // The name of the FailoverService.
+                string name = 1;
+
+                // The namespace of the FailoverService.
+                string namespace = 2;
+
+                // Subset routing is currently only supported for Istio backing services.
+                map<string, string> subset = 3;
+            }
+
             // The different destination types can be selected for a traffic shift.
             oneof destination_type {
                 // The use kubeService to shift traffic a Kubernetes Service/subset.
                 KubeDestination kube_service = 1;
+
+                // A traffic shift destination targeting a FailoverService.
+                FailoverServiceDestination failover_service = 3;
             }
 
             // Weights across all of the destinations must sum to 100. Each is interpreted as a percent from 0-100.
@@ -393,6 +408,11 @@ message TrafficPolicySpec {
 
         // Minimum ejection duration. Format: 1h/1m/1s/1ms. MUST BE >=1ms. Defaults to 30s.
         google.protobuf.Duration base_ejection_time = 3;
+
+        // Maximum % of hosts in the load balancing pool for the upstream service that can be ejected,
+        // but will eject at least one host regardless of the value. MUST BE >= 0 and <= 100.
+        // Defaults to 100%, allowing all hosts to be ejected from the pool.
+        uint32 max_ejection_percent = 4;
     }
 }
 
@@ -411,4 +431,7 @@ message TrafficPolicyStatus {
     // The status of the TrafficPolicy for each TrafficTarget to which it has been applied.
     // A TrafficPolicy may be Accepted for some TrafficTargets and rejected for others.
     map<string, ApprovalStatus> traffic_targets = 3;
+
+    // The list of Workloads to which this policy has been applied.
+    repeated string workloads = 4;
 }

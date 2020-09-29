@@ -199,6 +199,9 @@ spec:
               targetPort: 15443
               name: tls
               nodePort: ${port}
+    egressGateways:
+    - name: istio-egressgateway
+      enabled: true
   meshConfig:
     enableAutoMtls: true
   values:

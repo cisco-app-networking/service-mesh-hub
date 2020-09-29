@@ -78,9 +78,13 @@ message MeshSpec {
             // Defaults to 15443 (or the NodePort) of the Kubernetes Service (depending on its type).
             uint32 external_tls_port = 3;
 
+            uint32 external_https_port = 4;
+
             // Container port on which the gateway is listening for TLS connections.
             // Defaults to 15443.
-            uint32 tls_container_port = 4;
+            uint32 tls_container_port = 5;
+
+            uint32 https_container_port = 6;
 
         }
 
@@ -97,6 +101,8 @@ message MeshSpec {
             // Container port on which the gateway is listening for TLS connections.
             // Defaults to 15443.
             uint32 tls_container_port = 3;
+
+            uint32 https_container_port = 5;
 
         }
     }

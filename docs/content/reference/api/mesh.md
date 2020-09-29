@@ -153,6 +153,7 @@ Configuration metadata for Istio Citadel (Istio's security component).
 | name | [string](#string) |  | Name of the service providing the egressgateway defaults to `istio-egressgateway` |
 | workloadLabels | [][MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry](#discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry) | repeated | Labels matching the workload which backs the gateway, defaults to `{"istio": "egressgateway"}`. |
 | tlsContainerPort | [uint32](#uint32) |  | Container port on which the gateway is listening for TLS connections. Defaults to 15443. |
+| httpsContainerPort | [uint32](#uint32) |  |  |
 
 
 
@@ -186,7 +187,9 @@ Configuration metadata for Istio Citadel (Istio's security component).
 | workloadLabels | [][MeshSpec.Istio.IngressGatewayInfo.WorkloadLabelsEntry](#discovery.smh.solo.io.MeshSpec.Istio.IngressGatewayInfo.WorkloadLabelsEntry) | repeated | Labels matching the workload which backs the gateway, defaults to `{"istio": "ingressgateway"}`. |
 | externalAddress | [string](#string) |  | The externally-reachable address on which the gateway is listening for TLS connections. This will be the address used for cross-cluster connectivity. Defaults to the LoadBalancer Address (or NodeIP) of the Kubernetes Service (depending on its type). |
 | externalTlsPort | [uint32](#uint32) |  | The externally-reachable port on which the gateway is listening for TLS connections. This will be the port used for cross-cluster connectivity. List of common ports: https://istio.io/latest/docs/ops/deployment/requirements/#ports-used-by-istio. Defaults to 15443 (or the NodePort) of the Kubernetes Service (depending on its type). |
+| externalHttpsPort | [uint32](#uint32) |  |  |
 | tlsContainerPort | [uint32](#uint32) |  | Container port on which the gateway is listening for TLS connections. Defaults to 15443. |
+| httpsContainerPort | [uint32](#uint32) |  |  |
 
 
 

@@ -32,7 +32,8 @@ const (
 	istioConfigMapMeshDataKey = "mesh"
 
 	// https://istio.io/docs/ops/deployment/requirements/#ports-used-by-istio
-	defaultGatewayPortName = "tls"
+	defaultGatewayPortName      = "tls"
+	defaultHTTPSGatewayPortName = "https"
 )
 
 var (
@@ -186,13 +187,18 @@ func getIngressGateway(
 	if tlsPort == nil {
 		return nil, eris.Errorf("no TLS port found on ingress gateway")
 	}
+	httpsPort := getSvcPortByName(defaultHTTPSGatewayPortName, svc)
+	if httpsPort == nil {
+		return nil, eris.Errorf("no HTTPS port found on ingress gateway")
+	}
 
 	var (
 		// TODO(ilackarms): currently we only use one address to connect to the gateway.
 		// We can support multiple addresses per gateway for load balancing purposes in the future
 
-		externalAddress string
-		externalPort    uint32
+		externalAddress   string
+		externalPort      uint32
+		externalHTTPSPort uint32
 	)
 	switch svc.Spec.Type {
 	case corev1.ServiceTypeNodePort:
@@ -208,6 +214,7 @@ func getIngressGateway(
 		}
 		externalAddress = addr
 		externalPort = uint32(tlsPort.NodePort)
+		externalHTTPSPort = uint32(httpsPort.NodePort)
 
 	case corev1.ServiceTypeLoadBalancer:
 		ingress := svc.Status.LoadBalancer.Ingress
@@ -220,12 +227,13 @@ func getIngressGateway(
 			externalAddress = ingress[0].IP
 		}
 		externalPort = uint32(tlsPort.Port)
+		externalHTTPSPort = uint32(httpsPort.Port)
 
 	default:
 		return nil, eris.Errorf("unsupported service type %v for ingress gateway", svc.Spec.Type)
 	}
 
-	if tlsPort.TargetPort.StrVal != "" {
+	if tlsPort.TargetPort.StrVal != "" || httpsPort.TargetPort.StrVal != "" {
 		// TODO(ilackarms): for the sake of simplicity, we only support number target ports
 		// if we come across the need to support named ports, we can add the lookup on the pod container itself here
 		return nil, eris.Errorf("named target ports are not currently supported on ingress gateway")
@@ -235,11 +243,18 @@ func getIngressGateway(
 		containerPort = tlsPort.Port
 	}
 
+	httpsContainerPort := httpsPort.TargetPort.IntVal
+	if httpsContainerPort == 0 {
+		httpsContainerPort = httpsPort.Port
+	}
+
 	return &v1alpha2.MeshSpec_Istio_IngressGatewayInfo{
-		WorkloadLabels:   workloadLabels,
-		ExternalAddress:  externalAddress,
-		ExternalTlsPort:  externalPort,
-		TlsContainerPort: uint32(containerPort),
+		WorkloadLabels:     workloadLabels,
+		ExternalAddress:    externalAddress,
+		ExternalTlsPort:    externalPort,
+		ExternalHttpsPort:  externalHTTPSPort,
+		TlsContainerPort:   uint32(containerPort),
+		HttpsContainerPort: uint32(httpsContainerPort),
 	}, nil
 }
 
@@ -252,14 +267,26 @@ func getEgressGateway(
 	if tlsPort == nil {
 		return nil, eris.Errorf("no TLS port found on egress gateway")
 	}
+	httpsPort := getSvcPortByName(defaultHTTPSGatewayPortName, svc)
+	if httpsPort == nil {
+		return nil, eris.Errorf("no HTTPS port found on egress gateway")
+	}
+
 	containerPort := tlsPort.TargetPort.IntVal
 	if containerPort == 0 {
 		containerPort = tlsPort.Port
 	}
+
+	httpsContainerPort := httpsPort.TargetPort.IntVal
+	if httpsContainerPort == 0 {
+		httpsContainerPort = httpsPort.Port
+	}
+
 	return &v1alpha2.MeshSpec_Istio_EgressGatewayInfo{
-		Name:             svc.Name,
-		WorkloadLabels:   workloadLabels,
-		TlsContainerPort: uint32(containerPort),
+		Name:               svc.Name,
+		WorkloadLabels:     workloadLabels,
+		TlsContainerPort:   uint32(containerPort),
+		HttpsContainerPort: unit32(httpsContainerPort),
 	}, nil
 }
 

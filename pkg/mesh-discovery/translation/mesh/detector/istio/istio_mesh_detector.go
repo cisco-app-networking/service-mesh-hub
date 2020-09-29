@@ -286,7 +286,7 @@ func getEgressGateway(
 		Name:               svc.Name,
 		WorkloadLabels:     workloadLabels,
 		TlsContainerPort:   uint32(containerPort),
-		HttpsContainerPort: unit32(httpsContainerPort),
+		HttpsContainerPort: uint32(httpsContainerPort),
 	}, nil
 }
 

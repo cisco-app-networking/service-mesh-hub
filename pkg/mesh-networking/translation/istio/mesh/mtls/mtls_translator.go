@@ -100,16 +100,22 @@ func (t *translator) Translate(
 	}
 	mtlsConfig := virtualMesh.Spec.MtlsConfig
 
-	// TODO(ilackarms): currently we assume a shared trust model
-	// we'll want to expand this to support limited trust in the future
-	sharedTrust := mtlsConfig.GetShared()
-	rootCA := sharedTrust.GetRootCertificateAuthority()
+	var rootCA *v1alpha2.VirtualMeshSpec_RootCertificateAuthority
+	switch trustModel := mtlsConfig.GetTrustModel().(type) {
+	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Limited:
+		rootCA = trustModel.Limited.GetRootCertificateAuthority()
+	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Shared:
+		rootCA = trustModel.Shared.RootCertificateAuthority
+	default:
+		contextutils.LoggerFrom(t.ctx).Debugf("cannot configure root certificates for mesh %v which has no root certificate authority", sets.Key(mesh))
+		return
+	}
+
 	agentInfo := mesh.Spec.AgentInfo
 	if agentInfo == nil {
 		contextutils.LoggerFrom(t.ctx).Debugf("cannot configure root certificates for mesh %v which has no cert-agent", sets.Key(mesh))
 		return
 	}
-
 	var rootCaSecret *v1.ObjectRef
 	switch caType := rootCA.CaSource.(type) {
 	case *v1alpha2.VirtualMeshSpec_RootCertificateAuthority_Generated:

@@ -365,3 +365,28 @@ function debug_proxy() {
   k logs --context="kind-$cluster" -n "$namespace" "deployment/$deployment" -c istio-proxy -f
   set +x
 }
+
+
+function create_virtual_mesh() {
+  cluster=$1
+  K="kubectl --context=kind-${cluster}"
+  ${K} apply -f - <<EOF
+apiVersion: networking.smh.solo.io/v1alpha2
+kind: VirtualMesh
+metadata:
+  name: virtual-mesh
+  namespace: service-mesh-hub
+spec:
+  mtlsConfig:
+    autoRestartPods: true
+    limited:
+      rootCertificateAuthority:
+        generated: null
+  federation: {}
+  meshes:
+  - name: istiod-istio-system-mgmt-cluster
+    namespace: service-mesh-hub
+  - name: istiod-istio-system-remote-cluster
+    namespace: service-mesh-hub
+EOF
+}

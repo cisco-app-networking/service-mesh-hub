@@ -100,9 +100,9 @@ message MeshSpec {
 
             // Container port on which the gateway is listening for TLS connections.
             // Defaults to 15443.
-            uint32 tls_container_port = 3;
+            uint32 tls_port = 3;
 
-            uint32 https_container_port = 5;
+            uint32 https_port = 4;
 
         }
     }

@@ -152,8 +152,8 @@ Configuration metadata for Istio Citadel (Istio's security component).
 | ----- | ---- | ----- | ----------- |
 | name | [string](#string) |  | Name of the service providing the egressgateway defaults to `istio-egressgateway` |
 | workloadLabels | [][MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry](#discovery.smh.solo.io.MeshSpec.Istio.EgressGatewayInfo.WorkloadLabelsEntry) | repeated | Labels matching the workload which backs the gateway, defaults to `{"istio": "egressgateway"}`. |
-| tlsContainerPort | [uint32](#uint32) |  | Container port on which the gateway is listening for TLS connections. Defaults to 15443. |
-| httpsContainerPort | [uint32](#uint32) |  |  |
+| tlsPort | [uint32](#uint32) |  | Container port on which the gateway is listening for TLS connections. Defaults to 15443. |
+| httpsPort | [uint32](#uint32) |  |  |
 
 
 

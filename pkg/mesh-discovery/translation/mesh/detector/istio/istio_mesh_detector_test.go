@@ -194,12 +194,19 @@ var _ = Describe("IstioMeshDetector", func() {
 				ClusterName: clusterName,
 			},
 			Spec: corev1.ServiceSpec{
-				Ports: []corev1.ServicePort{{
-					Name:     "tls",
-					Protocol: "TCP",
-					Port:     1234,
-					NodePort: 5678,
-				}},
+				Ports: []corev1.ServicePort{
+					{
+						Name:     "tls",
+						Protocol: "TCP",
+						Port:     1234,
+						NodePort: 5678,
+					},
+					{
+						Name:     "https",
+						Protocol: "HTTPS",
+						Port:     2345,
+						NodePort: 6789,
+					}},
 				Selector: workloadLabels,
 				Type:     corev1.ServiceTypeNodePort,
 			},
@@ -267,10 +274,12 @@ var _ = Describe("IstioMeshDetector", func() {
 						CitadelServiceAccount: serviceAccountName,
 					},
 					IngressGateways: []*v1alpha2.MeshSpec_Istio_IngressGatewayInfo{{
-						WorkloadLabels:   workloadLabels,
-						ExternalAddress:  "external.domain",
-						ExternalTlsPort:  5678,
-						TlsContainerPort: 1234,
+						WorkloadLabels:     workloadLabels,
+						ExternalAddress:    "external.domain",
+						ExternalTlsPort:    5678,
+						TlsContainerPort:   1234,
+						ExternalHttpsPort:  6789,
+						HttpsContainerPort: 2345,
 					}},
 				}},
 			},

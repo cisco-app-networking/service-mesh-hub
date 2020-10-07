@@ -272,21 +272,15 @@ func getEgressGateway(
 		return nil, eris.Errorf("no HTTPS port found on egress gateway")
 	}
 
-	containerPort := tlsPort.TargetPort.IntVal
-	if containerPort == 0 {
-		containerPort = tlsPort.Port
-	}
+	containerPort := tlsPort.Port
 
-	httpsContainerPort := httpsPort.TargetPort.IntVal
-	if httpsContainerPort == 0 {
-		httpsContainerPort = httpsPort.Port
-	}
+	httpsContainerPort := httpsPort.Port
 
 	return &v1alpha2.MeshSpec_Istio_EgressGatewayInfo{
-		Name:               svc.Name,
-		WorkloadLabels:     workloadLabels,
-		TlsContainerPort:   uint32(containerPort),
-		HttpsContainerPort: uint32(httpsContainerPort),
+		Name:           svc.Name,
+		WorkloadLabels: workloadLabels,
+		TlsPort:        uint32(containerPort),
+		HttpsPort:      uint32(httpsContainerPort),
 	}, nil
 }
 

@@ -1,4 +1,4 @@
-package consul_test
+package configtarget_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestConsul(t *testing.T) {
+func TestConfigtarget(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Consul Suite")
+	RunSpecs(t, "Configtarget Suite")
 }

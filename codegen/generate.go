@@ -6,17 +6,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/solo-io/service-mesh-hub/pkg/common/version"
-
 	externalapis "github.com/solo-io/external-apis/codegen"
 	"github.com/solo-io/service-mesh-hub/codegen/groups"
 	"github.com/solo-io/service-mesh-hub/codegen/helm"
 	"github.com/solo-io/service-mesh-hub/codegen/io"
+	"github.com/solo-io/service-mesh-hub/pkg/common/version"
 	skv1alpha1 "github.com/solo-io/skv2/api/multicluster/v1alpha1"
 	"github.com/solo-io/skv2/codegen"
 	"github.com/solo-io/skv2/codegen/model"
+	"github.com/solo-io/skv2/codegen/skv2_anyvendor"
 	"github.com/solo-io/skv2/contrib"
-	"github.com/solo-io/solo-kit/pkg/code-generator/sk_anyvendor"
 )
 
 func main() {
@@ -96,6 +95,7 @@ var (
 				io.IstioNetworkingOutputTypes,
 				io.SmiNetworkingOutputTypes,
 				io.LocalNetworkingOutputTypes,
+				io.AppMeshNetworkingOutputTypes,
 			},
 		},
 		// certificate issuer component
@@ -128,10 +128,11 @@ var (
 		for _, component := range topLevelComponents {
 			allTemplates = append(allTemplates, component.makeCodegenTemplates()...)
 		}
+
 		return allTemplates
 	}()
 
-	anyvendorImports = sk_anyvendor.CreateDefaultMatchOptions([]string{
+	anyvendorImports = skv2_anyvendor.CreateDefaultMatchOptions([]string{
 		"api/**/*.proto",
 	})
 )

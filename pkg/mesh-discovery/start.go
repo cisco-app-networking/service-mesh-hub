@@ -27,8 +27,9 @@ func startReconciler(
 		snapshotBuilder,
 		translator,
 		parameters.MasterManager.GetClient(),
-		parameters.ClusterWatcher,
+		parameters.Clusters,
 		parameters.SnapshotHistory,
+		parameters.VerboseMode,
 	)
 	return nil
 }

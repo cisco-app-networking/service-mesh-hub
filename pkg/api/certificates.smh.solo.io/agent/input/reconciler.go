@@ -6,6 +6,7 @@
 // storage event is received for any of:
 // * IssuedCertificates
 // * CertificateRequests
+// * PodBounceDirectives
 // * Secrets
 // * Pods
 // for a given cluster or set of clusters.
@@ -34,9 +35,11 @@ import (
 )
 
 // the multiClusterReconciler reconciles events for input resources across clusters
+// this private interface is used to ensure that the generated struct implements the intended functions
 type multiClusterReconciler interface {
 	certificates_smh_solo_io_v1alpha2_controllers.MulticlusterIssuedCertificateReconciler
 	certificates_smh_solo_io_v1alpha2_controllers.MulticlusterCertificateRequestReconciler
+	certificates_smh_solo_io_v1alpha2_controllers.MulticlusterPodBounceDirectiveReconciler
 
 	v1_controllers.MulticlusterSecretReconciler
 	v1_controllers.MulticlusterPodReconciler
@@ -48,6 +51,22 @@ type multiClusterReconcilerImpl struct {
 	base input.MultiClusterReconciler
 }
 
+// Options for reconcileing a snapshot
+type ReconcileOptions struct {
+
+	// Options for reconciling IssuedCertificates
+	IssuedCertificates reconcile.Options
+	// Options for reconciling CertificateRequests
+	CertificateRequests reconcile.Options
+	// Options for reconciling PodBounceDirectives
+	PodBounceDirectives reconcile.Options
+
+	// Options for reconciling Secrets
+	Secrets reconcile.Options
+	// Options for reconciling Pods
+	Pods reconcile.Options
+}
+
 // register the reconcile func with the cluster watcher
 // the reconcileInterval, if greater than 0, will limit the number of reconciles
 // to one per interval.
@@ -56,8 +75,9 @@ func RegisterMultiClusterReconciler(
 	clusters multicluster.ClusterWatcher,
 	reconcileFunc input.MultiClusterReconcileFunc,
 	reconcileInterval time.Duration,
+	options ReconcileOptions,
 	predicates ...predicate.Predicate,
-) {
+) input.MultiClusterReconciler {
 
 	base := input.NewMultiClusterReconcilerImpl(
 		ctx,
@@ -71,12 +91,16 @@ func RegisterMultiClusterReconciler(
 
 	// initialize reconcile loops
 
-	certificates_smh_solo_io_v1alpha2_controllers.NewMulticlusterIssuedCertificateReconcileLoop("IssuedCertificate", clusters).AddMulticlusterIssuedCertificateReconciler(ctx, r, predicates...)
-	certificates_smh_solo_io_v1alpha2_controllers.NewMulticlusterCertificateRequestReconcileLoop("CertificateRequest", clusters).AddMulticlusterCertificateRequestReconciler(ctx, r, predicates...)
+	certificates_smh_solo_io_v1alpha2_controllers.NewMulticlusterIssuedCertificateReconcileLoop("IssuedCertificate", clusters, options.IssuedCertificates).AddMulticlusterIssuedCertificateReconciler(ctx, r, predicates...)
 
-	v1_controllers.NewMulticlusterSecretReconcileLoop("Secret", clusters).AddMulticlusterSecretReconciler(ctx, r, predicates...)
-	v1_controllers.NewMulticlusterPodReconcileLoop("Pod", clusters).AddMulticlusterPodReconciler(ctx, r, predicates...)
+	certificates_smh_solo_io_v1alpha2_controllers.NewMulticlusterCertificateRequestReconcileLoop("CertificateRequest", clusters, options.CertificateRequests).AddMulticlusterCertificateRequestReconciler(ctx, r, predicates...)
 
+	certificates_smh_solo_io_v1alpha2_controllers.NewMulticlusterPodBounceDirectiveReconcileLoop("PodBounceDirective", clusters, options.PodBounceDirectives).AddMulticlusterPodBounceDirectiveReconciler(ctx, r, predicates...)
+
+	v1_controllers.NewMulticlusterSecretReconcileLoop("Secret", clusters, options.Secrets).AddMulticlusterSecretReconciler(ctx, r, predicates...)
+
+	v1_controllers.NewMulticlusterPodReconcileLoop("Pod", clusters, options.Pods).AddMulticlusterPodReconciler(ctx, r, predicates...)
+	return r.base
 }
 
 func (r *multiClusterReconcilerImpl) ReconcileIssuedCertificate(clusterName string, obj *certificates_smh_solo_io_v1alpha2.IssuedCertificate) (reconcile.Result, error) {
@@ -100,6 +124,21 @@ func (r *multiClusterReconcilerImpl) ReconcileCertificateRequest(clusterName str
 }
 
 func (r *multiClusterReconcilerImpl) ReconcileCertificateRequestDeletion(clusterName string, obj reconcile.Request) error {
+	ref := &sk_core_v1.ClusterObjectRef{
+		Name:        obj.Name,
+		Namespace:   obj.Namespace,
+		ClusterName: clusterName,
+	}
+	_, err := r.base.ReconcileClusterGeneric(ref)
+	return err
+}
+
+func (r *multiClusterReconcilerImpl) ReconcilePodBounceDirective(clusterName string, obj *certificates_smh_solo_io_v1alpha2.PodBounceDirective) (reconcile.Result, error) {
+	obj.ClusterName = clusterName
+	return r.base.ReconcileClusterGeneric(obj)
+}
+
+func (r *multiClusterReconcilerImpl) ReconcilePodBounceDirectiveDeletion(clusterName string, obj reconcile.Request) error {
 	ref := &sk_core_v1.ClusterObjectRef{
 		Name:        obj.Name,
 		Namespace:   obj.Namespace,
@@ -140,9 +179,11 @@ func (r *multiClusterReconcilerImpl) ReconcilePodDeletion(clusterName string, ob
 }
 
 // the singleClusterReconciler reconciles events for input resources across clusters
+// this private interface is used to ensure that the generated struct implements the intended functions
 type singleClusterReconciler interface {
 	certificates_smh_solo_io_v1alpha2_controllers.IssuedCertificateReconciler
 	certificates_smh_solo_io_v1alpha2_controllers.CertificateRequestReconciler
+	certificates_smh_solo_io_v1alpha2_controllers.PodBounceDirectiveReconciler
 
 	v1_controllers.SecretReconciler
 	v1_controllers.PodReconciler
@@ -162,8 +203,9 @@ func RegisterSingleClusterReconciler(
 	mgr manager.Manager,
 	reconcileFunc input.SingleClusterReconcileFunc,
 	reconcileInterval time.Duration,
+	options reconcile.Options,
 	predicates ...predicate.Predicate,
-) error {
+) (input.SingleClusterReconciler, error) {
 
 	base := input.NewSingleClusterReconciler(
 		ctx,
@@ -177,21 +219,24 @@ func RegisterSingleClusterReconciler(
 
 	// initialize reconcile loops
 
-	if err := certificates_smh_solo_io_v1alpha2_controllers.NewIssuedCertificateReconcileLoop("IssuedCertificate", mgr, reconcile.Options{}).RunIssuedCertificateReconciler(ctx, r, predicates...); err != nil {
-		return err
+	if err := certificates_smh_solo_io_v1alpha2_controllers.NewIssuedCertificateReconcileLoop("IssuedCertificate", mgr, options).RunIssuedCertificateReconciler(ctx, r, predicates...); err != nil {
+		return nil, err
 	}
-	if err := certificates_smh_solo_io_v1alpha2_controllers.NewCertificateRequestReconcileLoop("CertificateRequest", mgr, reconcile.Options{}).RunCertificateRequestReconciler(ctx, r, predicates...); err != nil {
-		return err
+	if err := certificates_smh_solo_io_v1alpha2_controllers.NewCertificateRequestReconcileLoop("CertificateRequest", mgr, options).RunCertificateRequestReconciler(ctx, r, predicates...); err != nil {
+		return nil, err
 	}
-
-	if err := v1_controllers.NewSecretReconcileLoop("Secret", mgr, reconcile.Options{}).RunSecretReconciler(ctx, r, predicates...); err != nil {
-		return err
-	}
-	if err := v1_controllers.NewPodReconcileLoop("Pod", mgr, reconcile.Options{}).RunPodReconciler(ctx, r, predicates...); err != nil {
-		return err
+	if err := certificates_smh_solo_io_v1alpha2_controllers.NewPodBounceDirectiveReconcileLoop("PodBounceDirective", mgr, options).RunPodBounceDirectiveReconciler(ctx, r, predicates...); err != nil {
+		return nil, err
 	}
 
-	return nil
+	if err := v1_controllers.NewSecretReconcileLoop("Secret", mgr, options).RunSecretReconciler(ctx, r, predicates...); err != nil {
+		return nil, err
+	}
+	if err := v1_controllers.NewPodReconcileLoop("Pod", mgr, options).RunPodReconciler(ctx, r, predicates...); err != nil {
+		return nil, err
+	}
+
+	return r.base, nil
 }
 
 func (r *singleClusterReconcilerImpl) ReconcileIssuedCertificate(obj *certificates_smh_solo_io_v1alpha2.IssuedCertificate) (reconcile.Result, error) {
@@ -212,6 +257,19 @@ func (r *singleClusterReconcilerImpl) ReconcileCertificateRequest(obj *certifica
 }
 
 func (r *singleClusterReconcilerImpl) ReconcileCertificateRequestDeletion(obj reconcile.Request) error {
+	ref := &sk_core_v1.ObjectRef{
+		Name:      obj.Name,
+		Namespace: obj.Namespace,
+	}
+	_, err := r.base.ReconcileGeneric(ref)
+	return err
+}
+
+func (r *singleClusterReconcilerImpl) ReconcilePodBounceDirective(obj *certificates_smh_solo_io_v1alpha2.PodBounceDirective) (reconcile.Result, error) {
+	return r.base.ReconcileGeneric(obj)
+}
+
+func (r *singleClusterReconcilerImpl) ReconcilePodBounceDirectiveDeletion(obj reconcile.Request) error {
 	ref := &sk_core_v1.ObjectRef{
 		Name:      obj.Name,
 		Namespace: obj.Namespace,

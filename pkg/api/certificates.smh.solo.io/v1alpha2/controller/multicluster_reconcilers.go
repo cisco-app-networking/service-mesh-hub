@@ -66,8 +66,8 @@ func (m *multiclusterIssuedCertificateReconcileLoop) AddMulticlusterIssuedCertif
 	m.loop.AddReconciler(ctx, genericReconciler, predicates...)
 }
 
-func NewMulticlusterIssuedCertificateReconcileLoop(name string, cw multicluster.ClusterWatcher) MulticlusterIssuedCertificateReconcileLoop {
-	return &multiclusterIssuedCertificateReconcileLoop{loop: mc_reconcile.NewLoop(name, cw, &certificates_smh_solo_io_v1alpha2.IssuedCertificate{})}
+func NewMulticlusterIssuedCertificateReconcileLoop(name string, cw multicluster.ClusterWatcher, options reconcile.Options) MulticlusterIssuedCertificateReconcileLoop {
+	return &multiclusterIssuedCertificateReconcileLoop{loop: mc_reconcile.NewLoop(name, cw, &certificates_smh_solo_io_v1alpha2.IssuedCertificate{}, options)}
 }
 
 type genericIssuedCertificateMulticlusterReconciler struct {
@@ -137,8 +137,8 @@ func (m *multiclusterCertificateRequestReconcileLoop) AddMulticlusterCertificate
 	m.loop.AddReconciler(ctx, genericReconciler, predicates...)
 }
 
-func NewMulticlusterCertificateRequestReconcileLoop(name string, cw multicluster.ClusterWatcher) MulticlusterCertificateRequestReconcileLoop {
-	return &multiclusterCertificateRequestReconcileLoop{loop: mc_reconcile.NewLoop(name, cw, &certificates_smh_solo_io_v1alpha2.CertificateRequest{})}
+func NewMulticlusterCertificateRequestReconcileLoop(name string, cw multicluster.ClusterWatcher, options reconcile.Options) MulticlusterCertificateRequestReconcileLoop {
+	return &multiclusterCertificateRequestReconcileLoop{loop: mc_reconcile.NewLoop(name, cw, &certificates_smh_solo_io_v1alpha2.CertificateRequest{}, options)}
 }
 
 type genericCertificateRequestMulticlusterReconciler struct {
@@ -158,4 +158,75 @@ func (g genericCertificateRequestMulticlusterReconciler) Reconcile(cluster strin
 		return reconcile.Result{}, errors.Errorf("internal error: CertificateRequest handler received event for %T", object)
 	}
 	return g.reconciler.ReconcileCertificateRequest(cluster, obj)
+}
+
+// Reconcile Upsert events for the PodBounceDirective Resource across clusters.
+// implemented by the user
+type MulticlusterPodBounceDirectiveReconciler interface {
+	ReconcilePodBounceDirective(clusterName string, obj *certificates_smh_solo_io_v1alpha2.PodBounceDirective) (reconcile.Result, error)
+}
+
+// Reconcile deletion events for the PodBounceDirective Resource across clusters.
+// Deletion receives a reconcile.Request as we cannot guarantee the last state of the object
+// before being deleted.
+// implemented by the user
+type MulticlusterPodBounceDirectiveDeletionReconciler interface {
+	ReconcilePodBounceDirectiveDeletion(clusterName string, req reconcile.Request) error
+}
+
+type MulticlusterPodBounceDirectiveReconcilerFuncs struct {
+	OnReconcilePodBounceDirective         func(clusterName string, obj *certificates_smh_solo_io_v1alpha2.PodBounceDirective) (reconcile.Result, error)
+	OnReconcilePodBounceDirectiveDeletion func(clusterName string, req reconcile.Request) error
+}
+
+func (f *MulticlusterPodBounceDirectiveReconcilerFuncs) ReconcilePodBounceDirective(clusterName string, obj *certificates_smh_solo_io_v1alpha2.PodBounceDirective) (reconcile.Result, error) {
+	if f.OnReconcilePodBounceDirective == nil {
+		return reconcile.Result{}, nil
+	}
+	return f.OnReconcilePodBounceDirective(clusterName, obj)
+}
+
+func (f *MulticlusterPodBounceDirectiveReconcilerFuncs) ReconcilePodBounceDirectiveDeletion(clusterName string, req reconcile.Request) error {
+	if f.OnReconcilePodBounceDirectiveDeletion == nil {
+		return nil
+	}
+	return f.OnReconcilePodBounceDirectiveDeletion(clusterName, req)
+}
+
+type MulticlusterPodBounceDirectiveReconcileLoop interface {
+	// AddMulticlusterPodBounceDirectiveReconciler adds a MulticlusterPodBounceDirectiveReconciler to the MulticlusterPodBounceDirectiveReconcileLoop.
+	AddMulticlusterPodBounceDirectiveReconciler(ctx context.Context, rec MulticlusterPodBounceDirectiveReconciler, predicates ...predicate.Predicate)
+}
+
+type multiclusterPodBounceDirectiveReconcileLoop struct {
+	loop multicluster.Loop
+}
+
+func (m *multiclusterPodBounceDirectiveReconcileLoop) AddMulticlusterPodBounceDirectiveReconciler(ctx context.Context, rec MulticlusterPodBounceDirectiveReconciler, predicates ...predicate.Predicate) {
+	genericReconciler := genericPodBounceDirectiveMulticlusterReconciler{reconciler: rec}
+
+	m.loop.AddReconciler(ctx, genericReconciler, predicates...)
+}
+
+func NewMulticlusterPodBounceDirectiveReconcileLoop(name string, cw multicluster.ClusterWatcher, options reconcile.Options) MulticlusterPodBounceDirectiveReconcileLoop {
+	return &multiclusterPodBounceDirectiveReconcileLoop{loop: mc_reconcile.NewLoop(name, cw, &certificates_smh_solo_io_v1alpha2.PodBounceDirective{}, options)}
+}
+
+type genericPodBounceDirectiveMulticlusterReconciler struct {
+	reconciler MulticlusterPodBounceDirectiveReconciler
+}
+
+func (g genericPodBounceDirectiveMulticlusterReconciler) ReconcileDeletion(cluster string, req reconcile.Request) error {
+	if deletionReconciler, ok := g.reconciler.(MulticlusterPodBounceDirectiveDeletionReconciler); ok {
+		return deletionReconciler.ReconcilePodBounceDirectiveDeletion(cluster, req)
+	}
+	return nil
+}
+
+func (g genericPodBounceDirectiveMulticlusterReconciler) Reconcile(cluster string, object ezkube.Object) (reconcile.Result, error) {
+	obj, ok := object.(*certificates_smh_solo_io_v1alpha2.PodBounceDirective)
+	if !ok {
+		return reconcile.Result{}, errors.Errorf("internal error: PodBounceDirective handler received event for %T", object)
+	}
+	return g.reconciler.ReconcilePodBounceDirective(cluster, obj)
 }

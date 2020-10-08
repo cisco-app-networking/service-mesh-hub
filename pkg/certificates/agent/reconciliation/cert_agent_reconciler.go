@@ -31,6 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	defaultIstioNamespace     = "istio-system"
+	defaultMtlsCredentialName = "mtls-credential"
+)
+
 var (
 	// all output resources are labeled to prevent
 	// resource collisions & garbage collection of
@@ -130,7 +135,19 @@ func (r *certAgentReconciler) reconcileIssuedCertificate(
 		// ensure issued cert secret exists, nothing to do for this issued certificate
 		if issuedCertificateSecret, err := inputSecrets.Find(issuedCertificate.Spec.IssuedCertificateSecret); err == nil {
 			// add secret output to prevent it from being GC'ed
-			outputs.AddSecrets(issuedCertificateSecret)
+			issuedCertificateData := secrets.IntermediateCADataFromSecretData(issuedCertificateSecret.Data)
+			outputs.AddSecrets(&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      defaultMtlsCredentialName,
+					Namespace: defaultIstioNamespace,
+					Labels:    agentLabels,
+				},
+				Data: map[string][]byte{
+					"cert":   issuedCertificateData.CertChain,
+					"key":    issuedCertificateData.PrivateKey,
+					"cacert": issuedCertificateData.CaCert,
+				},
+			})
 			return nil
 		}
 		// otherwise, restart the workflow from PENDING

@@ -106,7 +106,7 @@ func (d *meshDetector) detectMesh(deployment *appsv1.Deployment, in input.Snapsh
 		deployment.Namespace,
 		deployment.ClusterName,
 		defaults.DefaultEgressGatewayWorkloadLabels,
-		d.services,
+		in.Services(),
 	)
 
 	agent := getAgent(

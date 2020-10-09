@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/rotisserie/eris"
-	"github.com/solo-io/service-mesh-hub/pkg/common/version"
-
 	discoveryv1alpha2sets "github.com/solo-io/service-mesh-hub/pkg/api/discovery.smh.solo.io/v1alpha2/sets"
 	"github.com/solo-io/service-mesh-hub/pkg/api/networking.smh.solo.io/output/local"
 	"github.com/solo-io/skv2/pkg/ezkube"
@@ -141,7 +139,14 @@ func (t *translator) updateMtlsOutputs(
 			mtlsConfig.AutoRestartPods,
 		)
 	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Limited:
-		return eris.Errorf("limited trust not supported in version %v of service mesh hub", version.Version)
+		return t.configureLimitedTrust(
+			mesh,
+			trustModel.Limited,
+			virtualMesh.Ref,
+			istioOutputs,
+			localOutputs,
+			mtlsConfig.AutoRestartPods,
+		)
 	}
 
 	return nil
@@ -158,6 +163,44 @@ func (t *translator) configureSharedTrust(
 	autoRestartPods bool,
 ) error {
 	rootCA := sharedTrust.GetRootCertificateAuthority()
+
+	rootCaSecret, err := t.getOrCreateRootCaSecret(
+		rootCA,
+		virtualMeshRef,
+		localOutputs,
+	)
+	if err != nil {
+		return err
+	}
+
+	agentInfo := mesh.Spec.AgentInfo
+	if agentInfo == nil {
+		contextutils.LoggerFrom(t.ctx).Debugf("cannot configure root certificates for mesh %v which has no cert-agent", sets.Key(mesh))
+		return nil
+	}
+
+	issuedCertificate, podBounceDirective := t.constructIssuedCertificate(
+		mesh,
+		rootCaSecret,
+		agentInfo.AgentNamespace,
+		autoRestartPods,
+	)
+	istioOutputs.AddIssuedCertificates(issuedCertificate)
+	istioOutputs.AddPodBounceDirectives(podBounceDirective)
+	return nil
+}
+
+// will create the secret if it is self-signed,
+// otherwise will return the user-provided secret ref in the mtls config
+func (t *translator) configureLimitedTrust(
+	mesh *discoveryv1alpha2.Mesh,
+	limitedTrust *v1alpha2.VirtualMeshSpec_MTLSConfig_LimitedTrust,
+	virtualMeshRef *v1.ObjectRef,
+	istioOutputs istio.Builder,
+	localOutputs local.Builder,
+	autoRestartPods bool,
+) error {
+	rootCA := limitedTrust.GetRootCertificateAuthority()
 
 	rootCaSecret, err := t.getOrCreateRootCaSecret(
 		rootCA,

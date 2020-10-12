@@ -40,7 +40,9 @@ const (
 	defaultIstioNamespace        = "istio-system"
 	// name of the istio root CA secret
 	// https://istio.io/latest/docs/tasks/security/cert-management/plugin-ca-cert/
-	istioCaSecretName = "cacerts"
+	istioCaSecretName            = "cacerts"
+	defaultCaSecretName          = "smh-cacerts"
+	defaultGatewayCredentialName = "mtls-credential"
 )
 
 var (
@@ -184,6 +186,7 @@ func (t *translator) configureSharedTrust(
 		rootCaSecret,
 		agentInfo.AgentNamespace,
 		autoRestartPods,
+		false,
 	)
 	istioOutputs.AddIssuedCertificates(issuedCertificate)
 	istioOutputs.AddPodBounceDirectives(podBounceDirective)
@@ -222,6 +225,7 @@ func (t *translator) configureLimitedTrust(
 		rootCaSecret,
 		agentInfo.AgentNamespace,
 		autoRestartPods,
+		true,
 	)
 	istioOutputs.AddIssuedCertificates(issuedCertificate)
 	istioOutputs.AddPodBounceDirectives(podBounceDirective)
@@ -283,7 +287,7 @@ func (t *translator) constructIssuedCertificate(
 	mesh *discoveryv1alpha2.Mesh,
 	rootCaSecret *v1.ObjectRef,
 	agentNamespace string,
-	autoRestartPods bool,
+	autoRestartPods, limitedTrust bool,
 ) (*certificatesv1alpha2.IssuedCertificate, *certificatesv1alpha2.PodBounceDirective) {
 	istioMesh := mesh.Spec.GetIstio()
 
@@ -306,7 +310,14 @@ func (t *translator) constructIssuedCertificate(
 		Name:      istioCaSecretName,
 		Namespace: istioNamespace,
 	}
-
+	var gatewayCertificateSecret *v1.ObjectRef
+	if limitedTrust {
+		istioCaCerts.Name = defaultCaSecretName
+		gatewayCertificateSecret = &v1.ObjectRef{
+			Name:      defaultGatewayCredentialName,
+			Namespace: istioNamespace,
+		}
+	}
 	issuedCertificateMeta := metav1.ObjectMeta{
 		Name: mesh.Name,
 		// write to the agent namespace
@@ -340,7 +351,10 @@ func (t *translator) constructIssuedCertificate(
 			Org:                      defaultIstioOrg,
 			SigningCertificateSecret: rootCaSecret,
 			IssuedCertificateSecret:  istioCaCerts,
+			GatewaySni:               fmt.Sprintf("*.%s.global", istioMesh.GetInstallation().GetCluster()),
+			GatewayCertificateSecret: gatewayCertificateSecret,
 			PodBounceDirective:       podBounceRef,
+			LimitedTrust:             limitedTrust,
 		},
 	}, podBounceDirective
 }

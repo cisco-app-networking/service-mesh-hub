@@ -51,6 +51,11 @@ message IssuedCertificateSpec {
     // which share a data plane with the target mesh.
     .core.skv2.solo.io.ObjectRef pod_bounce_directive = 5;
 
+    bool limited_trust = 6;
+
+    .core.skv2.solo.io.ObjectRef gateway_certificate_secret = 7;
+
+    string gateway_sni = 8;
 }
 
 // The IssuedCertificate status is written by the CertificateRequesting agent.

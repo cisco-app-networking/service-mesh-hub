@@ -2,6 +2,8 @@ package reconciliation
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/solo-io/skv2/contrib/pkg/sets"
 	"github.com/solo-io/skv2/pkg/ezkube"
 	"github.com/solo-io/skv2/pkg/reconcile"
+	"istio.io/istio/security/pkg/pki/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -131,6 +134,46 @@ func (r *certAgentReconciler) reconcileIssuedCertificate(
 		if issuedCertificateSecret, err := inputSecrets.Find(issuedCertificate.Spec.IssuedCertificateSecret); err == nil {
 			// add secret output to prevent it from being GC'ed
 			outputs.AddSecrets(issuedCertificateSecret)
+			if issuedCertificate.Spec.LimitedTrust {
+				issuedCertificateData := secrets.IntermediateCADataFromSecretData(issuedCertificateSecret.Data)
+				opts := util.CertOptions{
+					Host:       issuedCertificate.Spec.GatewaySni,
+					TTL:        365 * 24 * time.Hour,
+					NotBefore:  time.Now(),
+					Org:        issuedCertificate.Spec.Org,
+					RSAKeySize: 4096,
+					IsDualUse:  true,
+					IsClient:   true,
+					IsServer:   true,
+				}
+
+				block, _ := pem.Decode(issuedCertificateData.CaCert)
+				if opts.SignerCert, err = x509.ParseCertificate(block.Bytes); err != nil {
+					return fmt.Errorf("error parsing local CA certificate: %w", err)
+				}
+				block, _ = pem.Decode(issuedCertificateData.CaPrivateKey)
+				if opts.SignerPriv, err = x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
+					return fmt.Errorf("error parsing local CA key: %w", err)
+				}
+
+				cert, key, err := util.GenCertKeyFromOptions(opts)
+				if err != nil {
+					return fmt.Errorf("error generating gateway certificate: %w", err)
+				}
+
+				outputs.AddSecrets(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      issuedCertificate.Spec.GatewayCertificateSecret.Name,
+						Namespace: issuedCertificate.Spec.GatewayCertificateSecret.Namespace,
+						Labels:    agentLabels,
+					},
+					Data: map[string][]byte{
+						"cert":   utils.AppendRootCerts(cert, issuedCertificateData.CaCert),
+						"key":    key,
+						"cacert": issuedCertificateData.RootCert,
+					},
+				})
+			}
 			return nil
 		}
 		// otherwise, restart the workflow from PENDING

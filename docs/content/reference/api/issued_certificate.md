@@ -39,6 +39,9 @@ IssuedCertificates are used to issue SSL certificates to remote Kubernetes clust
 | signingCertificateSecret | [core.skv2.solo.io.ObjectRef](#core.skv2.solo.io.ObjectRef) |  | The secret containing the root SSL certificate used to sign this IssuedCertificate (located in the Certificate Issuer's cluster). |
 | issuedCertificateSecret | [core.skv2.solo.io.ObjectRef](#core.skv2.solo.io.ObjectRef) |  | The secret containing the SSL certificate to be generated for this IssuedCertificate (located in the Certificate Agent's cluster). |
 | podBounceDirective | [core.skv2.solo.io.ObjectRef](#core.skv2.solo.io.ObjectRef) |  | A ref to a PodBounceDirective specifying a list of k8s pods to bounce (delete and cause a restart) when the certificate is issued. This will include the control plane pods as well as any pods which share a data plane with the target mesh. |
+| limitedTrust | [bool](#bool) |  |  |
+| gatewayCertificateSecret | [core.skv2.solo.io.ObjectRef](#core.skv2.solo.io.ObjectRef) |  |  |
+| gatewaySni | [string](#string) |  |  |
 
 
 

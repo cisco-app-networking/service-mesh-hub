@@ -473,7 +473,7 @@ func (t *translator) federateLimitedTrust(
 									Mode:           networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
 									CredentialName: "mtls-credential",
 									// Hardcoded for now, until Cert Creation is done
-									Sni: "helloworld.default.cluster2",
+									Sni: fmt.Sprintf("%s.global", istioCluster),
 								},
 							},
 						},
@@ -566,9 +566,10 @@ func (t *translator) federateLimitedTrust(
 								},
 
 								Tls: &networkingv1alpha3spec.ClientTLSSettings{
-									Mode: networkingv1alpha3spec.ClientTLSSettings_ISTIO_MUTUAL,
+									Mode: networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
 									// Hardcoded for now, until Cert Creation is done
-									Sni: "helloworld.default.cluster2",
+									CredentialName: "mtls-credential",
+									Sni:            fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
 								},
 							},
 						},

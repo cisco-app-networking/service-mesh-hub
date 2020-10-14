@@ -363,6 +363,11 @@ func (t *translator) federateLimitedTrust(
 			continue
 		}
 
+		// Do not include istio services when configuring limited trust
+		if _, ok := trafficTarget.Spec.GetKubeService().GetLabels()["istio"]; ok {
+			continue
+		}
+
 		serviceEntryIp, err := traffictargetutils.ConstructUniqueIpForKubeService(meshKubeService.Ref)
 		if err != nil {
 			// should never happen
@@ -472,7 +477,7 @@ func (t *translator) federateLimitedTrust(
 							Protocol: httpsGatewayProtocol,
 							Name:     httpsGatewayPortName,
 						},
-						Hosts: []string{globalHostnameMatch},
+						Hosts: []string{federatedHostname},
 						Tls: &networkingv1alpha3spec.ServerTLSSettings{
 							Mode: networkingv1alpha3spec.ServerTLSSettings_ISTIO_MUTUAL,
 						},
@@ -506,10 +511,9 @@ func (t *translator) federateLimitedTrust(
 										},
 
 										Tls: &networkingv1alpha3spec.ClientTLSSettings{
-											Mode: networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
+											Mode: networkingv1alpha3spec.ClientTLSSettings_ISTIO_MUTUAL,
 											// Hardcoded for now, until Cert Creation is done
-											CredentialName: "mtls-credential",
-											Sni:            fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
+											Sni: fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
 										},
 									},
 								},
@@ -620,7 +624,7 @@ func (t *translator) federateLimitedTrust(
 		Spec: networkingv1alpha3spec.Gateway{
 			Servers: []*networkingv1alpha3spec.Server{{
 				Port: &networkingv1alpha3spec.Port{
-					Number:   ingressGateway.HttpsContainerPort,
+					Number:   443,
 					Protocol: httpsGatewayProtocol,
 					Name:     httpsGatewayPortName,
 				},

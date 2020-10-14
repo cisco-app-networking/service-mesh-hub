@@ -301,6 +301,7 @@ func (t *translator) federateSharedTrust(
 						Tls: &networkingv1alpha3spec.ClientTLSSettings{
 							// TODO this won't work with other mesh types https://github.com/solo-io/service-mesh-hub/issues/242
 							Mode: networkingv1alpha3spec.ClientTLSSettings_ISTIO_MUTUAL,
+							Sni:  fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
 						},
 					},
 					Subsets: federatedSubsets,
@@ -508,7 +509,7 @@ func (t *translator) federateLimitedTrust(
 											Mode: networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
 											// Hardcoded for now, until Cert Creation is done
 											CredentialName: "mtls-credential",
-											Sni:            fmt.Sprintf("*.%s.global", istioMesh.Installation.Cluster),
+											Sni:            fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
 										},
 									},
 								},
@@ -593,7 +594,7 @@ func (t *translator) federateLimitedTrust(
 									Mode:           networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
 									CredentialName: "mtls-credential",
 									// Hardcoded for now, until Cert Creation is done
-									Sni: fmt.Sprintf("*.%s.global", istioCluster),
+									Sni: fmt.Sprintf("%s.global", istioCluster),
 								},
 							},
 						},

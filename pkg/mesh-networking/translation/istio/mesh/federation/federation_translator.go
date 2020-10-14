@@ -142,14 +142,8 @@ func (t *translator) Translate(
 
 	switch virtualMesh.GetSpec().GetMtlsConfig().GetTrustModel().(type) {
 	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Limited:
-		if len(istioMesh.EgressGateways) < 1 {
-			contextutils.LoggerFrom(t.ctx).Debugf("ignoring istio mesh %v has no egress gateway", sets.Key(mesh))
-			return
-		}
-		// TODO(ilackarms): consider supporting multiple egress gateways or selecting a specific gateway.
-		// Currently, we just default to using the first one in the list.
-		egressGateway := istioMesh.EgressGateways[0]
-		t.federateLimitedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway, egressGateway)
+
+		t.federateLimitedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
 	default:
 		t.federateSharedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
 	}
@@ -355,7 +349,6 @@ func (t *translator) federateLimitedTrust(
 	reporter reporting.Reporter,
 	trafficTargets []*discoveryv1alpha2.TrafficTarget,
 	ingressGateway *discoveryv1alpha2.MeshSpec_Istio_IngressGatewayInfo,
-	egressGateway *discoveryv1alpha2.MeshSpec_Istio_EgressGatewayInfo,
 ) {
 
 	istioCluster := istioMesh.Installation.Cluster
@@ -419,6 +412,14 @@ func (t *translator) federateLimitedTrust(
 				continue
 			}
 
+			if len(clientIstio.EgressGateways) < 1 {
+				contextutils.LoggerFrom(t.ctx).Debugf("ignoring istio mesh %v has no egress gateway", sets.Key(mesh))
+				continue
+			}
+			// TODO(ilackarms): consider supporting multiple egress gateways or selecting a specific gateway.
+			// Currently, we just default to using the first one in the list.
+			egressGateway := clientIstio.EgressGateways[0]
+
 			se := &networkingv1alpha3.ServiceEntry{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        federatedHostname,
@@ -453,7 +454,126 @@ func (t *translator) federateLimitedTrust(
 				subset.TrafficPolicy = nil
 			}
 
+			// istio gateway names must be DNS-1123 labels
+			// hyphens are legal, dots are not, so we convert here
+			egwName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-egress-%v", virtualMesh.Ref.Name, trafficTarget.Name))
+			egw := &networkingv1alpha3.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        egwName,
+					Namespace:   clientIstio.Installation.Namespace,
+					ClusterName: clientIstio.Installation.Cluster,
+					Labels:      metautils.TranslatedObjectLabels(),
+				},
+				Spec: networkingv1alpha3spec.Gateway{
+					Servers: []*networkingv1alpha3spec.Server{{
+						Port: &networkingv1alpha3spec.Port{
+							Number:   egressGateway.HttpsPort,
+							Protocol: httpsGatewayProtocol,
+							Name:     httpsGatewayPortName,
+						},
+						Hosts: []string{globalHostnameMatch},
+						Tls: &networkingv1alpha3spec.ServerTLSSettings{
+							Mode: networkingv1alpha3spec.ServerTLSSettings_ISTIO_MUTUAL,
+						},
+					}},
+					Selector: egressGateway.WorkloadLabels,
+				},
+			}
+			outputs.AddGateways(egw)
+
+			tlsOriginationSubsetName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-tls-origination", trafficTarget.Name))
+
+			drName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-originate-tls-%v", trafficTarget.Name, virtualMesh.Ref.Name))
 			dr := &networkingv1alpha3.DestinationRule{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        drName,
+					Namespace:   clientIstio.Installation.Namespace,
+					ClusterName: clientIstio.Installation.Cluster,
+					Labels:      metautils.TranslatedObjectLabels(),
+				},
+				Spec: networkingv1alpha3spec.DestinationRule{
+					Host: fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, istioNamespace),
+
+					Subsets: []*networkingv1alpha3spec.Subset{
+						{
+							Name: tlsOriginationSubsetName,
+							TrafficPolicy: &networkingv1alpha3spec.TrafficPolicy{
+								PortLevelSettings: []*networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy{
+									{
+										Port: &networkingv1alpha3spec.PortSelector{
+											Number: egressGateway.HttpsPort,
+										},
+
+										Tls: &networkingv1alpha3spec.ClientTLSSettings{
+											Mode: networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
+											// Hardcoded for now, until Cert Creation is done
+											CredentialName: "mtls-credential",
+											Sni:            fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			outputs.AddDestinationRules(dr)
+
+			vsName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-%v-egw-traffic", trafficTarget.Name, virtualMesh.Ref.Name))
+			vs := &networkingv1alpha3.VirtualService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        vsName,
+					Namespace:   clientIstio.Installation.Namespace,
+					ClusterName: clientIstio.Installation.Cluster,
+					Labels:      metautils.TranslatedObjectLabels(),
+				},
+				Spec: networkingv1alpha3spec.VirtualService{
+					Hosts:    []string{federatedHostname},
+					Gateways: []string{egwName, "mesh"},
+					Http: []*networkingv1alpha3spec.HTTPRoute{
+						{
+							Match: []*networkingv1alpha3spec.HTTPMatchRequest{
+								{
+									Port:     443,
+									Gateways: []string{"mesh"},
+								},
+							},
+							Route: []*networkingv1alpha3spec.HTTPRouteDestination{
+								{
+									Destination: &networkingv1alpha3spec.Destination{
+										Host:   fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, istioNamespace),
+										Subset: tlsOriginationSubsetName,
+										Port: &networkingv1alpha3spec.PortSelector{
+											Number: egressGateway.HttpsPort,
+										},
+									},
+								},
+							},
+						},
+						{
+							Match: []*networkingv1alpha3spec.HTTPMatchRequest{
+								{
+									Port:     egressGateway.HttpsPort,
+									Gateways: []string{egwName},
+								},
+							},
+							Route: []*networkingv1alpha3spec.HTTPRouteDestination{
+								{
+									Destination: &networkingv1alpha3spec.Destination{
+										Host: federatedHostname,
+										Port: &networkingv1alpha3spec.PortSelector{
+											Number: ports[0].GetNumber(),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			outputs.AddVirtualServices(vs)
+
+			dr2 := &networkingv1alpha3.DestinationRule{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        federatedHostname,
 					Namespace:   clientIstio.Installation.Namespace,
@@ -466,7 +586,7 @@ func (t *translator) federateLimitedTrust(
 						PortLevelSettings: []*networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy{
 							{
 								Port: &networkingv1alpha3spec.PortSelector{
-									Number: egressGateway.HttpsPort,
+									Number: ports[0].Number,
 								},
 
 								Tls: &networkingv1alpha3spec.ClientTLSSettings{
@@ -482,7 +602,7 @@ func (t *translator) federateLimitedTrust(
 				},
 			}
 			outputs.AddServiceEntries(se)
-			outputs.AddDestinationRules(dr)
+			outputs.AddDestinationRules(dr2)
 		}
 	}
 
@@ -515,124 +635,6 @@ func (t *translator) federateLimitedTrust(
 	}
 	outputs.AddGateways(igw)
 
-	// istio gateway names must be DNS-1123 labels
-	// hyphens are legal, dots are not, so we convert here
-	egwName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-egress-%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace))
-	egw := &networkingv1alpha3.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        egwName,
-			Namespace:   istioNamespace,
-			ClusterName: istioCluster,
-			Labels:      metautils.TranslatedObjectLabels(),
-		},
-		Spec: networkingv1alpha3spec.Gateway{
-			Servers: []*networkingv1alpha3spec.Server{{
-				Port: &networkingv1alpha3spec.Port{
-					Number:   egressGateway.HttpsPort,
-					Protocol: httpsGatewayProtocol,
-					Name:     httpsGatewayPortName,
-				},
-				Hosts: []string{globalHostnameMatch},
-				Tls: &networkingv1alpha3spec.ServerTLSSettings{
-					Mode: networkingv1alpha3spec.ServerTLSSettings_ISTIO_MUTUAL,
-				},
-			}},
-			Selector: egressGateway.WorkloadLabels,
-		},
-	}
-	outputs.AddGateways(egw)
-
-	tlsOriginationSubsetName := "tls-origination"
-
-	drName := kubeutils.SanitizeNameV2(fmt.Sprintf("originate-tls-%v-%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace))
-	dr := &networkingv1alpha3.DestinationRule{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        drName,
-			Namespace:   istioNamespace,
-			Labels:      metautils.TranslatedObjectLabels(),
-			ClusterName: istioCluster,
-		},
-		Spec: networkingv1alpha3spec.DestinationRule{
-			Host: fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, istioNamespace),
-
-			Subsets: []*networkingv1alpha3spec.Subset{
-				{
-					Name: tlsOriginationSubsetName,
-					TrafficPolicy: &networkingv1alpha3spec.TrafficPolicy{
-						PortLevelSettings: []*networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy{
-							{
-								Port: &networkingv1alpha3spec.PortSelector{
-									Number: egressGateway.HttpsPort,
-								},
-
-								Tls: &networkingv1alpha3spec.ClientTLSSettings{
-									Mode: networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
-									// Hardcoded for now, until Cert Creation is done
-									CredentialName: "mtls-credential",
-									Sni:            fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	outputs.AddDestinationRules(dr)
-
-	vsName := kubeutils.SanitizeNameV2(fmt.Sprintf("egw-traffic-direct-%v-%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace))
-	vs := &networkingv1alpha3.VirtualService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        vsName,
-			Namespace:   istioNamespace,
-			Labels:      metautils.TranslatedObjectLabels(),
-			ClusterName: istioCluster,
-		},
-		Spec: networkingv1alpha3spec.VirtualService{
-			Hosts:    []string{globalHostnameMatch},
-			Gateways: []string{egwName, "mesh"},
-			Http: []*networkingv1alpha3spec.HTTPRoute{
-				{
-					Match: []*networkingv1alpha3spec.HTTPMatchRequest{
-						{
-							Port:     443,
-							Gateways: []string{"mesh"},
-						},
-					},
-					Route: []*networkingv1alpha3spec.HTTPRouteDestination{
-						{
-							Destination: &networkingv1alpha3spec.Destination{
-								Host:   fmt.Sprintf("%s.%s.svc.cluster.local", egwName, istioNamespace),
-								Subset: tlsOriginationSubsetName,
-								Port: &networkingv1alpha3spec.PortSelector{
-									Number: egressGateway.HttpsPort,
-								},
-							},
-						},
-					},
-				},
-				{
-					Match: []*networkingv1alpha3spec.HTTPMatchRequest{
-						{
-							Port:     egressGateway.HttpsPort,
-							Gateways: []string{egwName},
-						},
-					},
-					Route: []*networkingv1alpha3spec.HTTPRouteDestination{
-						{
-							Destination: &networkingv1alpha3spec.Destination{
-								Host: globalHostnameMatch,
-								Port: &networkingv1alpha3spec.PortSelector{
-									Number: egressGateway.HttpsPort,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	outputs.AddVirtualServices(vs)
 }
 
 func servicesForMesh(

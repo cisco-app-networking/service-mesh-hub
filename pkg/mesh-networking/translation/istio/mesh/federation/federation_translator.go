@@ -539,7 +539,7 @@ func (t *translator) federateLimitedTrust(
 						{
 							Match: []*networkingv1alpha3spec.HTTPMatchRequest{
 								{
-									Port:     443,
+									Port:     80,
 									Gateways: []string{"mesh"},
 								},
 							},

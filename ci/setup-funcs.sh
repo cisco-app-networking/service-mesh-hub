@@ -204,6 +204,7 @@ spec:
       enabled: true
   meshConfig:
     enableAutoMtls: true
+    accessLogFile: "/dev/stdout"
   values:
     prometheus:
       enabled: false

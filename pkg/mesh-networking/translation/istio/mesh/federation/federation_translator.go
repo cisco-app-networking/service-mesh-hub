@@ -43,8 +43,9 @@ const (
 	httpsGatewayProtocol = "HTTPS"
 	httpsGatewayPortName = "https"
 
-	envoySniClusterFilterName        = "envoy.filters.network.sni_cluster"
-	envoyTcpClusterRewriteFilterName = "envoy.filters.network.tcp_cluster_rewrite"
+	envoySniClusterFilterName            = "envoy.filters.network.sni_cluster"
+	envoyHttpConnectionManagerFilterName = "envoy.filters.network.http_connection_manager"
+	envoyTcpClusterRewriteFilterName     = "envoy.filters.network.tcp_cluster_rewrite"
 
 	globalHostnameMatch = "*." + hostutils.GlobalHostnameSuffix
 )
@@ -140,11 +141,19 @@ func (t *translator) Translate(
 		return
 	}
 
+	var (
+		filterPatchOp        networkingv1alpha3spec.EnvoyFilter_Patch_Operation
+		filterChainMatchName string
+	)
+
 	switch virtualMesh.GetSpec().GetMtlsConfig().GetTrustModel().(type) {
 	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Limited:
-
+		filterChainMatchName = envoyHttpConnectionManagerFilterName
+		filterPatchOp = networkingv1alpha3spec.EnvoyFilter_Patch_INSERT_BEFORE
 		t.federateLimitedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
 	default:
+		filterChainMatchName = envoySniClusterFilterName
+		filterPatchOp = networkingv1alpha3spec.EnvoyFilter_Patch_INSERT_AFTER
 		t.federateSharedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
 	}
 	ef := &networkingv1alpha3.EnvoyFilter{
@@ -167,13 +176,13 @@ func (t *translator) Translate(
 							PortNumber: ingressGateway.TlsContainerPort,
 							FilterChain: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch_FilterChainMatch{
 								Filter: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch_FilterMatch{
-									Name: envoySniClusterFilterName,
+									Name: filterChainMatchName,
 								},
 							},
 						}},
 				},
 				Patch: &networkingv1alpha3spec.EnvoyFilter_Patch{
-					Operation: networkingv1alpha3spec.EnvoyFilter_Patch_INSERT_AFTER,
+					Operation: filterPatchOp,
 					Value:     tcpRewritePatch,
 				},
 			}},
@@ -301,7 +310,6 @@ func (t *translator) federateSharedTrust(
 						Tls: &networkingv1alpha3spec.ClientTLSSettings{
 							// TODO this won't work with other mesh types https://github.com/solo-io/service-mesh-hub/issues/242
 							Mode: networkingv1alpha3spec.ClientTLSSettings_ISTIO_MUTUAL,
-							Sni:  fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
 						},
 					},
 					Subsets: federatedSubsets,
@@ -539,7 +547,7 @@ func (t *translator) federateLimitedTrust(
 						{
 							Match: []*networkingv1alpha3spec.HTTPMatchRequest{
 								{
-									Port:     443,
+									Port:     15443,
 									Gateways: []string{"mesh"},
 								},
 							},
@@ -624,7 +632,7 @@ func (t *translator) federateLimitedTrust(
 		Spec: networkingv1alpha3spec.Gateway{
 			Servers: []*networkingv1alpha3spec.Server{{
 				Port: &networkingv1alpha3spec.Port{
-					Number:   443,
+					Number:   15443,
 					Protocol: httpsGatewayProtocol,
 					Name:     httpsGatewayPortName,
 				},

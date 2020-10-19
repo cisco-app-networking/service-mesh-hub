@@ -520,8 +520,6 @@ func (t *translator) federateLimitedTrust(
 
 										Tls: &networkingv1alpha3spec.ClientTLSSettings{
 											Mode: networkingv1alpha3spec.ClientTLSSettings_ISTIO_MUTUAL,
-											// Hardcoded for now, until Cert Creation is done
-											Sni: fmt.Sprintf("%s.global", istioMesh.Installation.Cluster),
 										},
 									},
 								},
@@ -636,7 +634,7 @@ func (t *translator) federateLimitedTrust(
 					Protocol: httpsGatewayProtocol,
 					Name:     httpsGatewayPortName,
 				},
-				Hosts: []string{globalHostnameMatch},
+				Hosts: []string{fmt.Sprintf("*.%s.%s", istioCluster, hostutils.GlobalHostnameSuffix)},
 				Tls: &networkingv1alpha3spec.ServerTLSSettings{
 					Mode: networkingv1alpha3spec.ServerTLSSettings_MUTUAL,
 					// Hardcoded for now, until Cert Creation is done

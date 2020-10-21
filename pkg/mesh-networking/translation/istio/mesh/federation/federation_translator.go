@@ -110,9 +110,6 @@ func (t *translator) Translate(
 	// TODO(ilackarms): consider supporting multiple ingress gateways or selecting a specific gateway.
 	// Currently, we just default to using the first one in the list.
 	ingressGateway := istioMesh.IngressGateways[0]
-	istioCluster := istioMesh.Installation.Cluster
-
-	istioNamespace := istioMesh.Installation.Namespace
 
 	trafficTargets := servicesForMesh(mesh, in.TrafficTargets())
 
@@ -120,6 +117,27 @@ func (t *translator) Translate(
 		contextutils.LoggerFrom(t.ctx).Debugf("no services found in istio mesh %v", sets.Key(mesh))
 		return
 	}
+
+	switch virtualMesh.GetSpec().GetMtlsConfig().GetTrustModel().(type) {
+	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Limited:
+		t.federateLimitedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
+	default:
+		t.federateSharedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
+	}
+}
+
+func (t *translator) federateSharedTrust(
+	in input.Snapshot,
+	mesh *discoveryv1alpha2.Mesh,
+	virtualMesh *discoveryv1alpha2.MeshStatus_AppliedVirtualMesh,
+	outputs istio.Builder,
+	istioMesh *discoveryv1alpha2.MeshSpec_Istio,
+	reporter reporting.Reporter,
+	trafficTargets []*discoveryv1alpha2.TrafficTarget,
+	ingressGateway *discoveryv1alpha2.MeshSpec_Istio_IngressGatewayInfo,
+) {
+	istioCluster := istioMesh.Installation.Cluster
+	istioNamespace := istioMesh.Installation.Namespace
 
 	kubeCluster, err := in.KubernetesClusters().Find(&v1.ObjectRef{
 		Name:      istioCluster,
@@ -141,69 +159,8 @@ func (t *translator) Translate(
 		return
 	}
 
-	var (
-		filterPatchOp        networkingv1alpha3spec.EnvoyFilter_Patch_Operation
-		filterChainMatchName string
-	)
-
-	switch virtualMesh.GetSpec().GetMtlsConfig().GetTrustModel().(type) {
-	case *v1alpha2.VirtualMeshSpec_MTLSConfig_Limited:
-		filterChainMatchName = envoyHttpConnectionManagerFilterName
-		filterPatchOp = networkingv1alpha3spec.EnvoyFilter_Patch_INSERT_BEFORE
-		t.federateLimitedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
-	default:
-		filterChainMatchName = envoySniClusterFilterName
-		filterPatchOp = networkingv1alpha3spec.EnvoyFilter_Patch_INSERT_AFTER
-		t.federateSharedTrust(in, mesh, virtualMesh, outputs, istioMesh, reporter, trafficTargets, ingressGateway)
-	}
-	ef := &networkingv1alpha3.EnvoyFilter{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        fmt.Sprintf("%v.%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace),
-			Namespace:   istioNamespace,
-			ClusterName: istioCluster,
-			Labels:      metautils.TranslatedObjectLabels(),
-		},
-		Spec: networkingv1alpha3spec.EnvoyFilter{
-			WorkloadSelector: &networkingv1alpha3spec.WorkloadSelector{
-				Labels: ingressGateway.WorkloadLabels,
-			},
-			ConfigPatches: []*networkingv1alpha3spec.EnvoyFilter_EnvoyConfigObjectPatch{{
-				ApplyTo: networkingv1alpha3spec.EnvoyFilter_NETWORK_FILTER,
-				Match: &networkingv1alpha3spec.EnvoyFilter_EnvoyConfigObjectMatch{
-					Context: networkingv1alpha3spec.EnvoyFilter_GATEWAY,
-					ObjectTypes: &networkingv1alpha3spec.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
-						Listener: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch{
-							PortNumber: ingressGateway.TlsContainerPort,
-							FilterChain: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch_FilterChainMatch{
-								Filter: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch_FilterMatch{
-									Name: filterChainMatchName,
-								},
-							},
-						}},
-				},
-				Patch: &networkingv1alpha3spec.EnvoyFilter_Patch{
-					Operation: filterPatchOp,
-					Value:     tcpRewritePatch,
-				},
-			}},
-		},
-	}
-	outputs.AddEnvoyFilters(ef)
-
-}
-
-func (t *translator) federateSharedTrust(
-	in input.Snapshot,
-	mesh *discoveryv1alpha2.Mesh,
-	virtualMesh *discoveryv1alpha2.MeshStatus_AppliedVirtualMesh,
-	outputs istio.Builder,
-	istioMesh *discoveryv1alpha2.MeshSpec_Istio,
-	reporter reporting.Reporter,
-	trafficTargets []*discoveryv1alpha2.TrafficTarget,
-	ingressGateway *discoveryv1alpha2.MeshSpec_Istio_IngressGatewayInfo,
-) {
-	istioCluster := istioMesh.Installation.Cluster
-	istioNamespace := istioMesh.Installation.Namespace
+	filterChainMatchName := envoySniClusterFilterName
+	filterPatchOp := networkingv1alpha3spec.EnvoyFilter_Patch_INSERT_AFTER
 
 	for _, trafficTarget := range trafficTargets {
 		meshKubeService := trafficTarget.Spec.GetKubeService()
@@ -347,6 +304,40 @@ func (t *translator) federateSharedTrust(
 		},
 	}
 	outputs.AddGateways(gw)
+
+	ef := &networkingv1alpha3.EnvoyFilter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        fmt.Sprintf("%v.%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace),
+			Namespace:   istioNamespace,
+			ClusterName: istioCluster,
+			Labels:      metautils.TranslatedObjectLabels(),
+		},
+		Spec: networkingv1alpha3spec.EnvoyFilter{
+			WorkloadSelector: &networkingv1alpha3spec.WorkloadSelector{
+				Labels: ingressGateway.WorkloadLabels,
+			},
+			ConfigPatches: []*networkingv1alpha3spec.EnvoyFilter_EnvoyConfigObjectPatch{{
+				ApplyTo: networkingv1alpha3spec.EnvoyFilter_NETWORK_FILTER,
+				Match: &networkingv1alpha3spec.EnvoyFilter_EnvoyConfigObjectMatch{
+					Context: networkingv1alpha3spec.EnvoyFilter_GATEWAY,
+					ObjectTypes: &networkingv1alpha3spec.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
+						Listener: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch{
+							PortNumber: ingressGateway.TlsContainerPort,
+							FilterChain: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch_FilterChainMatch{
+								Filter: &networkingv1alpha3spec.EnvoyFilter_ListenerMatch_FilterMatch{
+									Name: filterChainMatchName,
+								},
+							},
+						}},
+				},
+				Patch: &networkingv1alpha3spec.EnvoyFilter_Patch{
+					Operation: filterPatchOp,
+					Value:     tcpRewritePatch,
+				},
+			}},
+		},
+	}
+	outputs.AddEnvoyFilters(ef)
 }
 
 func (t *translator) federateLimitedTrust(
@@ -362,6 +353,44 @@ func (t *translator) federateLimitedTrust(
 
 	istioCluster := istioMesh.Installation.Cluster
 	istioNamespace := istioMesh.Installation.Namespace
+
+	_, err := in.KubernetesClusters().Find(&v1.ObjectRef{
+		Name:      istioCluster,
+		Namespace: defaults.GetPodNamespace(),
+	})
+	if err != nil {
+		contextutils.LoggerFrom(t.ctx).Errorf("internal error: cluster %v for istio mesh %v not found", istioCluster, sets.Key(mesh))
+		return
+	}
+
+	// istio gateway names must be DNS-1123 labels
+	// hyphens are legal, dots are not, so we convert here
+	igwName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-ingress-%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace))
+	igw := &networkingv1alpha3.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        igwName,
+			Namespace:   istioNamespace,
+			ClusterName: istioCluster,
+			Labels:      metautils.TranslatedObjectLabels(),
+		},
+		Spec: networkingv1alpha3spec.Gateway{
+			Servers: []*networkingv1alpha3spec.Server{{
+				Port: &networkingv1alpha3spec.Port{
+					Number:   443,
+					Protocol: httpsGatewayProtocol,
+					Name:     httpsGatewayPortName,
+				},
+				Hosts: []string{fmt.Sprintf("*.%s.%s", istioCluster, hostutils.GlobalHostnameSuffix)},
+				Tls: &networkingv1alpha3spec.ServerTLSSettings{
+					Mode: networkingv1alpha3spec.ServerTLSSettings_MUTUAL,
+					// Hardcoded for now, until Cert Creation is done
+					CredentialName: "mtls-credential",
+				},
+			}},
+			Selector: ingressGateway.WorkloadLabels,
+		},
+	}
+	outputs.AddGateways(igw)
 
 	for _, trafficTarget := range trafficTargets {
 		meshKubeService := trafficTarget.Spec.GetKubeService()
@@ -520,6 +549,7 @@ func (t *translator) federateLimitedTrust(
 
 										Tls: &networkingv1alpha3spec.ClientTLSSettings{
 											Mode: networkingv1alpha3spec.ClientTLSSettings_ISTIO_MUTUAL,
+											Sni:  federatedHostname,
 										},
 									},
 								},
@@ -604,7 +634,7 @@ func (t *translator) federateLimitedTrust(
 									Mode:           networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
 									CredentialName: "mtls-credential",
 									// Hardcoded for now, until Cert Creation is done
-									Sni: fmt.Sprintf("%s.global", istioCluster),
+									Sni: federatedHostname,
 								},
 							},
 						},
@@ -615,37 +645,35 @@ func (t *translator) federateLimitedTrust(
 			outputs.AddServiceEntries(se)
 			outputs.AddDestinationRules(dr2)
 		}
-	}
-
-	// istio gateway names must be DNS-1123 labels
-	// hyphens are legal, dots are not, so we convert here
-	igwName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-ingress-%v", virtualMesh.Ref.Name, virtualMesh.Ref.Namespace))
-	igw := &networkingv1alpha3.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        igwName,
-			Namespace:   istioNamespace,
-			ClusterName: istioCluster,
-			Labels:      metautils.TranslatedObjectLabels(),
-		},
-		Spec: networkingv1alpha3spec.Gateway{
-			Servers: []*networkingv1alpha3spec.Server{{
-				Port: &networkingv1alpha3spec.Port{
-					Number:   15443,
-					Protocol: httpsGatewayProtocol,
-					Name:     httpsGatewayPortName,
+		ingressVsName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-%v-igw-traffic", trafficTarget.Name, virtualMesh.Ref.Name))
+		ingressVs := &networkingv1alpha3.VirtualService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        ingressVsName,
+				Namespace:   istioNamespace,
+				ClusterName: istioCluster,
+				Labels:      metautils.TranslatedObjectLabels(),
+			},
+			Spec: networkingv1alpha3spec.VirtualService{
+				Hosts:    []string{federatedHostname},
+				Gateways: []string{igwName},
+				Http: []*networkingv1alpha3spec.HTTPRoute{
+					{
+						Route: []*networkingv1alpha3spec.HTTPRouteDestination{
+							{
+								Destination: &networkingv1alpha3spec.Destination{
+									Host: fmt.Sprintf("%s.%s.svc.cluster.local", meshKubeService.GetRef().GetName(), meshKubeService.GetRef().GetNamespace()),
+									Port: &networkingv1alpha3spec.PortSelector{
+										Number: ports[0].GetNumber(),
+									},
+								},
+							},
+						},
+					},
 				},
-				Hosts: []string{fmt.Sprintf("*.%s.%s", istioCluster, hostutils.GlobalHostnameSuffix)},
-				Tls: &networkingv1alpha3spec.ServerTLSSettings{
-					Mode: networkingv1alpha3spec.ServerTLSSettings_MUTUAL,
-					// Hardcoded for now, until Cert Creation is done
-					CredentialName: "mtls-credential",
-				},
-			}},
-			Selector: ingressGateway.WorkloadLabels,
-		},
+			},
+		}
+		outputs.AddVirtualServices(ingressVs)
 	}
-	outputs.AddGateways(igw)
-
 }
 
 func servicesForMesh(

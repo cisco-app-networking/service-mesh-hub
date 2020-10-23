@@ -36,17 +36,6 @@ spec:
                Shared trust can therefore be established across clusters without requiring
                private keys to ever leave the node.
           properties:
-            gatewayCertificateSecret:
-              properties:
-                name:
-                  description: name of the resource being referenced
-                  type: string
-                namespace:
-                  description: namespace of the resource being referenced
-                  type: string
-              type: object
-            gatewaySni:
-              type: string
             hosts:
               description: |-
                 A list of hostnames and IPs to generate a certificate for.
@@ -70,7 +59,22 @@ spec:
                   type: string
               type: object
             limitedTrust:
-              type: boolean
+              description: Limited trust specific configuration
+              properties:
+                gatewayCertificateSecret:
+                  description: The secret containing gateway mutual TLS credential information
+                  properties:
+                    name:
+                      description: name of the resource being referenced
+                      type: string
+                    namespace:
+                      description: namespace of the resource being referenced
+                      type: string
+                  type: object
+                gatewaySni:
+                  description: SNI name for generated tls certificates
+                  type: string
+              type: object
             org:
               description: The organization for this certificate.
               type: string

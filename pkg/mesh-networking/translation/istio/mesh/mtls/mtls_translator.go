@@ -351,10 +351,11 @@ func (t *translator) constructIssuedCertificate(
 			Org:                      defaultIstioOrg,
 			SigningCertificateSecret: rootCaSecret,
 			IssuedCertificateSecret:  istioCaCerts,
-			GatewaySni:               fmt.Sprintf("%s.global", istioMesh.GetInstallation().GetCluster()),
-			GatewayCertificateSecret: gatewayCertificateSecret,
 			PodBounceDirective:       podBounceRef,
-			LimitedTrust:             limitedTrust,
+			LimitedTrust: &certificatesv1alpha2.IssuedCertificateSpec_LimitedTrust{
+				GatewayCertificateSecret: gatewayCertificateSecret,
+				GatewaySni:               fmt.Sprintf("%s.global", istioMesh.GetInstallation().GetCluster()),
+			},
 		},
 	}, podBounceDirective
 }

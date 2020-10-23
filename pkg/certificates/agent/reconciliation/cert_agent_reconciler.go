@@ -34,6 +34,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	defaultGatewayRsaKeySize = 4096
+	defaultGatewayTTL        = 365 * 24 * time.Hour
+)
+
 var (
 	// all output resources are labeled to prevent
 	// resource collisions & garbage collection of
@@ -134,14 +139,14 @@ func (r *certAgentReconciler) reconcileIssuedCertificate(
 		if issuedCertificateSecret, err := inputSecrets.Find(issuedCertificate.Spec.IssuedCertificateSecret); err == nil {
 			// add secret output to prevent it from being GC'ed
 			outputs.AddSecrets(issuedCertificateSecret)
-			if issuedCertificate.Spec.LimitedTrust {
+			if issuedCertificate.Spec.LimitedTrust != nil {
 				issuedCertificateData := secrets.IntermediateCADataFromSecretData(issuedCertificateSecret.Data)
 				opts := util.CertOptions{
-					Host:       issuedCertificate.Spec.GatewaySni,
-					TTL:        365 * 24 * time.Hour,
+					Host:       issuedCertificate.Spec.LimitedTrust.GatewaySni,
+					TTL:        defaultGatewayTTL,
 					NotBefore:  time.Now(),
 					Org:        issuedCertificate.Spec.Org,
-					RSAKeySize: 4096,
+					RSAKeySize: defaultGatewayRsaKeySize,
 					IsDualUse:  true,
 					IsClient:   true,
 					IsServer:   true,
@@ -163,15 +168,15 @@ func (r *certAgentReconciler) reconcileIssuedCertificate(
 
 				outputs.AddSecrets(&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      issuedCertificate.Spec.GatewayCertificateSecret.Name,
-						Namespace: issuedCertificate.Spec.GatewayCertificateSecret.Namespace,
+						Name:      issuedCertificate.Spec.LimitedTrust.GatewayCertificateSecret.Name,
+						Namespace: issuedCertificate.Spec.LimitedTrust.GatewayCertificateSecret.Namespace,
 						Labels:    agentLabels,
 					},
-					Data: map[string][]byte{
-						"cert":   utils.AppendRootCerts(cert, issuedCertificateData.CaCert),
-						"key":    key,
-						"cacert": issuedCertificateData.RootCert,
-					},
+					Data: secrets.GatewayMTLSCredentialData{
+						CaCert: issuedCertificateData.RootCert,
+						Cert:   utils.AppendRootCerts(cert, issuedCertificateData.CaCert),
+						Key:    key,
+					}.ToSecretData(),
 				})
 			}
 			return nil

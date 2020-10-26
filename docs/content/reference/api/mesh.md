@@ -189,7 +189,7 @@ Configuration metadata for Istio Citadel (Istio's security component).
 | externalTlsPort | [uint32](#uint32) |  | The externally-reachable port on which the gateway is listening for TLS connections. This will be the port used for cross-cluster connectivity. List of common ports: https://istio.io/latest/docs/ops/deployment/requirements/#ports-used-by-istio. Defaults to 15443 (or the NodePort) of the Kubernetes Service (depending on its type). |
 | externalHttpsPort | [uint32](#uint32) |  |  |
 | tlsContainerPort | [uint32](#uint32) |  | Container port on which the gateway is listening for TLS connections. Defaults to 15443. |
-| httpsContainerPort | [uint32](#uint32) |  |  |
+| httpsPort | [uint32](#uint32) |  |  |
 
 
 

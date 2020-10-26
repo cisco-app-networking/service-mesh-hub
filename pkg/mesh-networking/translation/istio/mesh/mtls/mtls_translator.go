@@ -40,9 +40,9 @@ const (
 	defaultIstioNamespace        = "istio-system"
 	// name of the istio root CA secret
 	// https://istio.io/latest/docs/tasks/security/cert-management/plugin-ca-cert/
-	istioCaSecretName            = "cacerts"
-	defaultCaSecretName          = "smh-cacerts"
-	defaultGatewayCredentialName = "mtls-credential"
+	istioCaSecretName                  = "cacerts"
+	defaultCaSecretName                = "smh-cacerts"
+	defaultGatewayCredentialNameSuffix = "mtls-credential"
 )
 
 var (
@@ -186,7 +186,6 @@ func (t *translator) configureSharedTrust(
 		rootCaSecret,
 		agentInfo.AgentNamespace,
 		autoRestartPods,
-		false,
 	)
 	istioOutputs.AddIssuedCertificates(issuedCertificate)
 	istioOutputs.AddPodBounceDirectives(podBounceDirective)
@@ -225,8 +224,8 @@ func (t *translator) configureLimitedTrust(
 		rootCaSecret,
 		agentInfo.AgentNamespace,
 		autoRestartPods,
-		true,
 	)
+	issuedCertificate = t.modifyCertificateForLimitedTrust(mesh, virtualMeshRef, issuedCertificate)
 	istioOutputs.AddIssuedCertificates(issuedCertificate)
 	istioOutputs.AddPodBounceDirectives(podBounceDirective)
 	return nil
@@ -287,7 +286,7 @@ func (t *translator) constructIssuedCertificate(
 	mesh *discoveryv1alpha2.Mesh,
 	rootCaSecret *v1.ObjectRef,
 	agentNamespace string,
-	autoRestartPods, limitedTrust bool,
+	autoRestartPods bool,
 ) (*certificatesv1alpha2.IssuedCertificate, *certificatesv1alpha2.PodBounceDirective) {
 	istioMesh := mesh.Spec.GetIstio()
 
@@ -310,14 +309,7 @@ func (t *translator) constructIssuedCertificate(
 		Name:      istioCaSecretName,
 		Namespace: istioNamespace,
 	}
-	var gatewayCertificateSecret *v1.ObjectRef
-	if limitedTrust {
-		istioCaCerts.Name = defaultCaSecretName
-		gatewayCertificateSecret = &v1.ObjectRef{
-			Name:      defaultGatewayCredentialName,
-			Namespace: istioNamespace,
-		}
-	}
+
 	issuedCertificateMeta := metav1.ObjectMeta{
 		Name: mesh.Name,
 		// write to the agent namespace
@@ -352,12 +344,38 @@ func (t *translator) constructIssuedCertificate(
 			SigningCertificateSecret: rootCaSecret,
 			IssuedCertificateSecret:  istioCaCerts,
 			PodBounceDirective:       podBounceRef,
-			LimitedTrust: &certificatesv1alpha2.IssuedCertificateSpec_LimitedTrust{
-				GatewayCertificateSecret: gatewayCertificateSecret,
-				GatewaySni:               fmt.Sprintf("%s.global", istioMesh.GetInstallation().GetCluster()),
-			},
 		},
 	}, podBounceDirective
+}
+
+func (t *translator) modifyCertificateForLimitedTrust(
+	mesh *discoveryv1alpha2.Mesh,
+	virtualMeshRef *v1.ObjectRef,
+	certs *certificatesv1alpha2.IssuedCertificate,
+) *certificatesv1alpha2.IssuedCertificate {
+	istioMesh := mesh.Spec.GetIstio()
+	istioNamespace := istioMesh.GetInstallation().GetNamespace()
+	if istioNamespace == "" {
+		istioNamespace = defaultIstioNamespace
+	}
+
+	// the default location of the istio CA Certs secret
+	// the certificate workflow will produce a cert with this ref
+	istioCaCerts := &v1.ObjectRef{
+		Name:      istioCaSecretName,
+		Namespace: istioNamespace,
+	}
+	istioCaCerts.Name = defaultCaSecretName
+
+	certs.Spec.LimitedTrust = &certificatesv1alpha2.IssuedCertificateSpec_LimitedTrust{
+		GatewayCertificateSecret: &v1.ObjectRef{
+			Name:      fmt.Sprintf("%s-%s", virtualMeshRef.Name, defaultGatewayCredentialNameSuffix),
+			Namespace: istioNamespace,
+		},
+		GatewaySni: fmt.Sprintf("%s.global", istioMesh.GetInstallation().GetCluster()),
+	}
+
+	return certs
 }
 
 const (

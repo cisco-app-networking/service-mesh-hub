@@ -43,9 +43,8 @@ const (
 	httpsGatewayProtocol = "HTTPS"
 	httpsGatewayPortName = "https"
 
-	envoySniClusterFilterName            = "envoy.filters.network.sni_cluster"
-	envoyHttpConnectionManagerFilterName = "envoy.filters.network.http_connection_manager"
-	envoyTcpClusterRewriteFilterName     = "envoy.filters.network.tcp_cluster_rewrite"
+	envoySniClusterFilterName        = "envoy.filters.network.sni_cluster"
+	envoyTcpClusterRewriteFilterName = "envoy.filters.network.tcp_cluster_rewrite"
 
 	globalHostnameMatch = "*." + hostutils.GlobalHostnameSuffix
 )
@@ -376,7 +375,7 @@ func (t *translator) federateLimitedTrust(
 		Spec: networkingv1alpha3spec.Gateway{
 			Servers: []*networkingv1alpha3spec.Server{{
 				Port: &networkingv1alpha3spec.Port{
-					Number:   443,
+					Number:   ingressGateway.HttpsPort,
 					Protocol: httpsGatewayProtocol,
 					Name:     httpsGatewayPortName,
 				},
@@ -384,7 +383,7 @@ func (t *translator) federateLimitedTrust(
 				Tls: &networkingv1alpha3spec.ServerTLSSettings{
 					Mode: networkingv1alpha3spec.ServerTLSSettings_MUTUAL,
 					// Hardcoded for now, until Cert Creation is done
-					CredentialName: "mtls-credential",
+					CredentialName: buildCredentialName(virtualMesh),
 				},
 			}},
 			Selector: ingressGateway.WorkloadLabels,
@@ -461,7 +460,6 @@ func (t *translator) federateLimitedTrust(
 			}
 			// TODO(ilackarms): consider supporting multiple egress gateways or selecting a specific gateway.
 			// Currently, we just default to using the first one in the list.
-			egressGateway := clientIstio.EgressGateways[0]
 
 			se := &networkingv1alpha3.ServiceEntry{
 				ObjectMeta: metav1.ObjectMeta{
@@ -497,9 +495,10 @@ func (t *translator) federateLimitedTrust(
 				subset.TrafficPolicy = nil
 			}
 
+			egressGateway := clientIstio.EgressGateways[0]
 			// istio gateway names must be DNS-1123 labels
 			// hyphens are legal, dots are not, so we convert here
-			egwName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-egress-%v", virtualMesh.Ref.Name, trafficTarget.Name))
+			egwName := kubeutils.SanitizeNameV2(fmt.Sprintf("%v-%v-%v-egress", virtualMesh.Ref.Name, trafficTarget.Name, trafficTarget.Namespace))
 			egw := &networkingv1alpha3.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        egwName,
@@ -535,8 +534,7 @@ func (t *translator) federateLimitedTrust(
 					Labels:      metautils.TranslatedObjectLabels(),
 				},
 				Spec: networkingv1alpha3spec.DestinationRule{
-					Host: fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, istioNamespace),
-
+					Host: fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, clientIstio.Installation.Namespace),
 					Subsets: []*networkingv1alpha3spec.Subset{
 						{
 							Name: tlsOriginationSubsetName,
@@ -575,14 +573,13 @@ func (t *translator) federateLimitedTrust(
 						{
 							Match: []*networkingv1alpha3spec.HTTPMatchRequest{
 								{
-									Port:     80,
 									Gateways: []string{"mesh"},
 								},
 							},
 							Route: []*networkingv1alpha3spec.HTTPRouteDestination{
 								{
 									Destination: &networkingv1alpha3spec.Destination{
-										Host:   fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, istioNamespace),
+										Host:   fmt.Sprintf("%s.%s.svc.cluster.local", egressGateway.Name, clientIstio.Installation.Namespace),
 										Subset: tlsOriginationSubsetName,
 										Port: &networkingv1alpha3spec.PortSelector{
 											Number: egressGateway.HttpsPort,
@@ -602,9 +599,6 @@ func (t *translator) federateLimitedTrust(
 								{
 									Destination: &networkingv1alpha3spec.Destination{
 										Host: federatedHostname,
-										Port: &networkingv1alpha3spec.PortSelector{
-											Number: ports[0].GetNumber(),
-										},
 									},
 								},
 							},
@@ -624,20 +618,7 @@ func (t *translator) federateLimitedTrust(
 				Spec: networkingv1alpha3spec.DestinationRule{
 					Host: federatedHostname,
 					TrafficPolicy: &networkingv1alpha3spec.TrafficPolicy{
-						PortLevelSettings: []*networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy{
-							{
-								Port: &networkingv1alpha3spec.PortSelector{
-									Number: ports[0].Number,
-								},
-
-								Tls: &networkingv1alpha3spec.ClientTLSSettings{
-									Mode:           networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
-									CredentialName: "mtls-credential",
-									// Hardcoded for now, until Cert Creation is done
-									Sni: federatedHostname,
-								},
-							},
-						},
+						PortLevelSettings: buildTrafficPolicyPortSettings(ports, virtualMesh, federatedHostname),
 					},
 					Subsets: federatedSubsets,
 				},
@@ -661,10 +642,7 @@ func (t *translator) federateLimitedTrust(
 						Route: []*networkingv1alpha3spec.HTTPRouteDestination{
 							{
 								Destination: &networkingv1alpha3spec.Destination{
-									Host: fmt.Sprintf("%s.%s.svc.cluster.local", meshKubeService.GetRef().GetName(), meshKubeService.GetRef().GetNamespace()),
-									Port: &networkingv1alpha3spec.PortSelector{
-										Number: ports[0].GetNumber(),
-									},
+									Host: t.clusterDomains.GetServiceLocalFQDN(meshKubeService.GetRef()),
 								},
 							},
 						},
@@ -742,4 +720,33 @@ func buildTcpRewritePatchAsConfig(clusterName, clusterDomain string) (*types.Str
 			Config: tcpRewrite,
 		},
 	})
+}
+
+func buildTrafficPolicyPortSettings(
+	ports []*networkingv1alpha3spec.Port,
+	virtualMesh *discoveryv1alpha2.MeshStatus_AppliedVirtualMesh,
+	sni string,
+) []*networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy {
+	trafficPorts := make([]*networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy, len(ports))
+	for i, v := range ports {
+		trafficPort := &networkingv1alpha3spec.TrafficPolicy_PortTrafficPolicy{
+			Port: &networkingv1alpha3spec.PortSelector{
+				Number: v.Number,
+			},
+
+			Tls: &networkingv1alpha3spec.ClientTLSSettings{
+				Mode:           networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
+				CredentialName: buildCredentialName(virtualMesh),
+				// Hardcoded for now, until Cert Creation is done
+				Sni: sni,
+			},
+		}
+		trafficPorts[i] = trafficPort
+	}
+
+	return trafficPorts
+}
+
+func buildCredentialName(virtualMesh *discoveryv1alpha2.MeshStatus_AppliedVirtualMesh) string {
+	return fmt.Sprintf("%s-mtls-credential", virtualMesh.Ref.Name)
 }

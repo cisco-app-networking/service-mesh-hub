@@ -250,18 +250,13 @@ func getIngressGateway(
 		containerPort = tlsPort.Port
 	}
 
-	httpsContainerPort := httpsPort.TargetPort.IntVal
-	if httpsContainerPort == 0 {
-		httpsContainerPort = httpsPort.Port
-	}
-
 	return &v1alpha2.MeshSpec_Istio_IngressGatewayInfo{
-		WorkloadLabels:     workloadLabels,
-		ExternalAddress:    externalAddress,
-		ExternalTlsPort:    externalPort,
-		ExternalHttpsPort:  externalHTTPSPort,
-		TlsContainerPort:   uint32(containerPort),
-		HttpsContainerPort: uint32(httpsContainerPort),
+		WorkloadLabels:    workloadLabels,
+		ExternalAddress:   externalAddress,
+		ExternalTlsPort:   externalPort,
+		ExternalHttpsPort: externalHTTPSPort,
+		TlsContainerPort:  uint32(containerPort),
+		HttpsPort:         uint32(httpsPort.Port),
 	}, nil
 }
 

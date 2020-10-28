@@ -120,7 +120,7 @@ func getMeshMetadata(mesh *discoveryv1alpha2.Mesh) meshMetadata {
 		appmesh := mesh.Spec.GetAwsAppMesh()
 		return meshMetadata{
 			Type:         "appmesh",
-			Name:         appmesh.Name,
+			Name:         appmesh.AwsName,
 			Region:       appmesh.Region,
 			AwsAccountId: appmesh.AwsAccountId,
 			Clusters:     appmesh.Clusters,
@@ -137,6 +137,9 @@ func getMeshMetadata(mesh *discoveryv1alpha2.Mesh) meshMetadata {
 	case *discoveryv1alpha2.MeshSpec_ConsulConnect:
 		meshType = "consulconnect"
 		meshInstallation = mesh.Spec.GetConsulConnect().Installation
+	case *discoveryv1alpha2.MeshSpec_Osm:
+		meshType = "osm"
+		meshInstallation = mesh.Spec.GetOsm().Installation
 	}
 	return meshMetadata{
 		Type:      meshType,

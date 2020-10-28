@@ -177,6 +177,7 @@ func getIngressGateways(
 		gateway, err := getIngressGateway(svc, workloadLabels, allPods, allNodes)
 		if err != nil {
 			contextutils.LoggerFrom(ctx).Warnw("detection failed for matching istio ingress service", "error", err, "service", sets.Key(svc))
+			continue
 		}
 		ingressGateways = append(ingressGateways, gateway)
 	}

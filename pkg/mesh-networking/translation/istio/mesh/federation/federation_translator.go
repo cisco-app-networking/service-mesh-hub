@@ -737,8 +737,7 @@ func buildTrafficPolicyPortSettings(
 			Tls: &networkingv1alpha3spec.ClientTLSSettings{
 				Mode:           networkingv1alpha3spec.ClientTLSSettings_MUTUAL,
 				CredentialName: buildCredentialName(virtualMesh),
-				// Hardcoded for now, until Cert Creation is done
-				Sni: sni,
+				Sni:            sni,
 			},
 		}
 		trafficPorts[i] = trafficPort

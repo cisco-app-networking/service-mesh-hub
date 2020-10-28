@@ -465,18 +465,11 @@ var _ = Describe("FederationTranslator", func() {
 			},
 		}
 
-		in := input.NewSnapshot(
-			"ignored",
-			discoveryv1alpha2sets.NewTrafficTargetSet(trafficTarget1),
-			discoveryv1alpha2sets.NewWorkloadSet(),
-			discoveryv1alpha2sets.NewMeshSet(mesh, clientMesh),
-			v1alpha2sets.NewTrafficPolicySet(),
-			v1alpha2sets.NewAccessPolicySet(),
-			v1alpha2sets.NewVirtualMeshSet(),
-			v1alpha2sets.NewFailoverServiceSet(),
-			corev1sets.NewSecretSet(),
-			skv1alpha1sets.NewKubernetesClusterSet(kubeCluster),
-		)
+		in := input.NewInputSnapshotManualBuilder("ignored").
+			AddTrafficTargets(discoveryv1alpha2.TrafficTargetSlice{trafficTarget1}).
+			AddMeshes(discoveryv1alpha2.MeshSlice{mesh, clientMesh}).
+			AddKubernetesClusters(skv1alpha1.KubernetesClusterSlice{kubeCluster}).
+			Build()
 
 		t := NewTranslator(ctx, clusterDomains, in.TrafficTargets(), in.FailoverServices())
 		outputs := istio.NewBuilder(context.TODO(), "")

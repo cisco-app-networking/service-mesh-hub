@@ -359,14 +359,6 @@ func (t *translator) modifyCertificateForLimitedTrust(
 		istioNamespace = defaultIstioNamespace
 	}
 
-	// the default location of the istio CA Certs secret
-	// the certificate workflow will produce a cert with this ref
-	istioCaCerts := &v1.ObjectRef{
-		Name:      istioCaSecretName,
-		Namespace: istioNamespace,
-	}
-	istioCaCerts.Name = defaultCaSecretName
-
 	certs.Spec.LimitedTrust = &certificatesv1alpha2.IssuedCertificateSpec_LimitedTrust{
 		GatewayCertificateSecret: &v1.ObjectRef{
 			Name:      fmt.Sprintf("%s-%s", virtualMeshRef.Name, defaultGatewayCredentialNameSuffix),

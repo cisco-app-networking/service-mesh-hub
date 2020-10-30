@@ -8,7 +8,7 @@ var (
 		"istio": "ingressgateway",
 	}
 	// "istio": "egressgateway" is a known string pair to Istio- it's semantically meaningful but unfortunately not exported from anywhere
-	// their ingress gateway is hardcoded in their own implementation to have this label
+	// their egress gateway is hardcoded in their own implementation to have this label
 	DefaultEgressGatewayWorkloadLabels = map[string]string{
 		"istio": "egressgateway",
 	}

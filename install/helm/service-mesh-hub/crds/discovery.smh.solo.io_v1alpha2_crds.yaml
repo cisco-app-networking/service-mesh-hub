@@ -1005,6 +1005,9 @@ spec:
                   items:
                     properties:
                       httpsPort:
+                        description: |-
+                          Service HTTPS port.
+                          Defaults to 443
                         maximum: 4294967295
                         minimum: 0
                         type: integer
@@ -1053,6 +1056,9 @@ spec:
                         minimum: 0
                         type: integer
                       httpsPort:
+                        description: |-
+                          Service HTTPS port.
+                          Defaults to 443
                         maximum: 4294967295
                         minimum: 0
                         type: integer

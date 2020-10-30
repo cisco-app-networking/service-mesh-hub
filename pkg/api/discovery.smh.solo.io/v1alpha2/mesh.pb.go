@@ -296,7 +296,9 @@ type MeshSpec_Istio_IngressGatewayInfo struct {
 	ExternalHttpsPort uint32 `protobuf:"varint,4,opt,name=external_https_port,json=externalHttpsPort,proto3" json:"external_https_port,omitempty"`
 	// Container port on which the gateway is listening for TLS connections.
 	// Defaults to 15443.
-	TlsContainerPort     uint32   `protobuf:"varint,5,opt,name=tls_container_port,json=tlsContainerPort,proto3" json:"tls_container_port,omitempty"`
+	TlsContainerPort uint32 `protobuf:"varint,5,opt,name=tls_container_port,json=tlsContainerPort,proto3" json:"tls_container_port,omitempty"`
+	// Service HTTPS port.
+	// Defaults to 443
 	HttpsPort            uint32   `protobuf:"varint,6,opt,name=https_port,json=httpsPort,proto3" json:"https_port,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -378,7 +380,9 @@ type MeshSpec_Istio_EgressGatewayInfo struct {
 	WorkloadLabels map[string]string `protobuf:"bytes,2,rep,name=workload_labels,json=workloadLabels,proto3" json:"workload_labels,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Container port on which the gateway is listening for TLS connections.
 	// Defaults to 15443.
-	TlsPort              uint32   `protobuf:"varint,3,opt,name=tls_port,json=tlsPort,proto3" json:"tls_port,omitempty"`
+	TlsPort uint32 `protobuf:"varint,3,opt,name=tls_port,json=tlsPort,proto3" json:"tls_port,omitempty"`
+	// Service HTTPS port.
+	// Defaults to 443
 	HttpsPort            uint32   `protobuf:"varint,4,opt,name=https_port,json=httpsPort,proto3" json:"https_port,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`

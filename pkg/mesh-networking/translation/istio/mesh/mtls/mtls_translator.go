@@ -27,6 +27,7 @@ import (
 	discoveryv1alpha2 "github.com/solo-io/gloo-mesh/pkg/api/discovery.mesh.gloo.solo.io/v1alpha2"
 	"github.com/solo-io/gloo-mesh/pkg/mesh-networking/reporting"
 	"github.com/solo-io/gloo-mesh/pkg/mesh-networking/translation/utils/metautils"
+	istioUtils "github.com/solo-io/gloo-mesh/pkg/mesh-networking/translation/istio/utils"
 	"github.com/solo-io/go-utils/contextutils"
 	"github.com/solo-io/skv2/contrib/pkg/sets"
 	v1 "github.com/solo-io/skv2/pkg/api/core.skv2.solo.io/v1"
@@ -43,7 +44,6 @@ const (
 	// https://istio.io/latest/docs/tasks/security/cert-management/plugin-ca-cert/
 	istioCaSecretName                  = "cacerts"
 	defaultCaSecretName                = "smh-cacerts"
-	defaultGatewayCredentialNameSuffix = "mtls-credential"
 )
 
 var (
@@ -362,7 +362,7 @@ func (t *translator) modifyCertificateForLimitedTrust(
 
 	certs.Spec.LimitedTrust = &certificatesv1alpha2.IssuedCertificateSpec_LimitedTrust{
 		GatewayCertificateSecret: &v1.ObjectRef{
-			Name:      fmt.Sprintf("%s-%s", virtualMeshRef.Name, defaultGatewayCredentialNameSuffix),
+			Name:      istioUtils.CreateCredentialsName(virtualMeshRef),
 			Namespace: istioNamespace,
 		},
 		GatewaySni: fmt.Sprintf("%s.global", istioMesh.GetInstallation().GetCluster()),

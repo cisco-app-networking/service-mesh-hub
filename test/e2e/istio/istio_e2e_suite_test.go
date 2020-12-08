@@ -56,6 +56,7 @@ var _ = BeforeSuite(func() {
 
 	federateClusters(dynamicClient)
 })
+
 // Before a test check whether limited trust is set
 var _ = BeforeEach(func() {
 	if isLimitedTrust() {
@@ -67,19 +68,19 @@ func federateClusters(dynamicClient client.Client) {
 	if isLimitedTrust() {
 		VirtualMesh = data.LimitedTrustSelfSignedVirtualMesh(
 			"bookinfo-federation",
-		BookinfoNamespace,
-		[]*v1.ObjectRef{
-			masterMesh,
-			remoteMesh,
-		})
+			BookinfoNamespace,
+			[]*v1.ObjectRef{
+				masterMesh,
+				remoteMesh,
+			})
 	} else {
-	VirtualMesh = data.SelfSignedVirtualMesh(
-		"bookinfo-federation",
-		BookinfoNamespace,
-		[]*v1.ObjectRef{
-			masterMesh,
-			remoteMesh,
-		})
+		VirtualMesh = data.SelfSignedVirtualMesh(
+			"bookinfo-federation",
+			BookinfoNamespace,
+			[]*v1.ObjectRef{
+				masterMesh,
+				remoteMesh,
+			})
 	}
 
 	err = VirtualMeshManifest.AppendResources(VirtualMesh)

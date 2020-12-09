@@ -380,7 +380,7 @@ func (t *translator) federateLimitedTrust(
 		}
 
 		// Do not include istio services when configuring limited trust
-		if _, ok := trafficTarget.Spec.GetKubeService().GetLabels()["istio"]; ok {
+		if _, ok := meshKubeService.GetLabels()["istio"]; ok {
 			continue
 		}
 
@@ -394,7 +394,7 @@ func (t *translator) federateLimitedTrust(
 
 		endpointPorts := make(map[string]uint32)
 		var ports []*networkingv1alpha3spec.Port
-		for _, port := range trafficTarget.Spec.GetKubeService().GetPorts() {
+		for _, port := range meshKubeService.GetPorts() {
 			ports = append(ports, &networkingv1alpha3spec.Port{
 				Number:   port.Port,
 				Protocol: port.Protocol,

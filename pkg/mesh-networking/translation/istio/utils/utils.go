@@ -1,6 +1,6 @@
 package utils
 
-import(
+import (
 	"fmt"
 
 	v1 "github.com/solo-io/skv2/pkg/api/core.skv2.solo.io/v1"

@@ -380,7 +380,7 @@ func (t *translator) federateLimitedTrust(
 		}
 
 		// Do not include istio services when configuring limited trust
-		if _, ok := meshKubeService.GetLabels()["istio"]; ok {
+		if istioUtils.IsIstioInternal(trafficTarget) {
 			continue
 		}
 

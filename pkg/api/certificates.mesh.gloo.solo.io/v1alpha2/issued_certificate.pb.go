@@ -28,7 +28,9 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 type IssuedCertificateSpec_TlsType int32
 
 const (
-	IssuedCertificateSpec_SHARED  IssuedCertificateSpec_TlsType = 0
+	// Set when shared trust is used
+	IssuedCertificateSpec_SHARED IssuedCertificateSpec_TlsType = 0
+	// Set when limited trust is used
 	IssuedCertificateSpec_LIMITED IssuedCertificateSpec_TlsType = 1
 )
 

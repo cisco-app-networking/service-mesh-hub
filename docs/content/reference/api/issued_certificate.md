@@ -73,8 +73,8 @@ Possible TLS types for which to generate certificates
 
 | Name | Number | Description |
 | ---- | ------ | ----------- |
-| SHARED | 0 |  |
-| LIMITED | 1 |  |
+| SHARED | 0 | Set when shared trust is used |
+| LIMITED | 1 | Set when limited trust is used |
 
 
 

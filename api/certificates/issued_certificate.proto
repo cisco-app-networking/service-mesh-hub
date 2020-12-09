@@ -54,9 +54,9 @@ message IssuedCertificateSpec {
 
     // Possible TLS types for which to generate certificates
     enum TlsType {
-
+        // Set when shared trust is used
         SHARED = 0;
-
+        // Set when limited trust is used
         LIMITED = 1;
     }
 }

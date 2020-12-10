@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	// Cluster contextx
+	// Cluster contexts
 	mgmtContext   = "kind-mgmt-cluster"
 	remoteContext = "kind-remote-cluster"
 )
